@@ -680,7 +680,14 @@ class GeneralPurposeParser:
 	### The mother of all Steps:
 	###
 class	DefaultStep(Thread):
-	def __init__(self):
+    
+    #This limits the number of concurrent ("submitted") step instances,
+    #in other words, the number of threads on which start() has been 
+    #called. The code creating instances of derived classes will block
+    #until the semaphore is acquired.
+    semaphore = BoundedSemaphore(100)
+	
+    def __init__(self):
 		
 		#### thread init
 		Thread.__init__(self)
@@ -739,31 +746,41 @@ class	DefaultStep(Thread):
 				self.previous.append(elem)
 	def setName(self, x):
 		self.stepname=x
+
+    #override the start method to make sure that we do not
+    #generate any exceptions in our code between acquiring semaphore
+    #and calling Thread.start()
+    def start(self):
+        DefaultStep.semaphore.acquire()
+        Thread.start(self)
 	
 	def run(self):	
-		self.init()
+        try:
+            self.init()
 
-		if self.failed:
-			#self.message("Error detected... ")
-			BOH.deregister()
-			self.completed=True
-			
-		elif not self.isDone():
-			try:
-				self.performStep()
-				self.finalize()
-			except Exception, inst:	
-				self.message("...")
-				self.message( type(inst))
-				self.message( inst)
-				BOH.deregister()
-				self.completed=True
-				self.failed=True
-		else:
-			self.message("Completed (previously).")	
-			BOH.deregister()
-			self.completed=True
-			self.completedpreviously=True
+            if self.failed:
+                #self.message("Error detected... ")
+                BOH.deregister()
+                self.completed=True
+                
+            elif not self.isDone():
+                try:
+                    self.performStep()
+                    self.finalize()
+                except Exception, inst:	
+                    self.message("...")
+                    self.message( type(inst))
+                    self.message( inst)
+                    BOH.deregister()
+                    self.completed=True
+                    self.failed=True
+            else:
+                self.message("Completed (previously).")	
+                BOH.deregister()
+                self.completed=True
+                self.completedpreviously=True
+        finally:
+            DefaultStep.semaphore.release()
 		
 	def	performStep():
 		self.message("in a step...")
