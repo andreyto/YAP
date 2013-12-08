@@ -517,10 +517,10 @@ class GridTask():
 		sx = ".%s.%s.%s.%s.sh" % (randrange(1,100),randrange(1,100),randrange(1,100),randrange(1,100))
 		
 
+        ##### to avoid too many opened files OSError
+        pool_open_files.acquire()
+        ### bounded semaphore should limit throttle the files opening for tasks created around the same time
         try:
-            ##### to avoid too many opened files OSError
-            pool_open_files.acquire()
-            ### bounded semaphore should limit throttle the files opening for tasks created around the same time
             try:
                 scriptfile, scriptfilepath = tempfile.mkstemp(suffix=sx, prefix=px, dir=self.cwd, text=True)
             finally:
@@ -754,7 +754,11 @@ class	DefaultStep(Thread):
     #and calling Thread.start()
     def start(self):
         DefaultStep.semaphore.acquire()
-        Thread.start(self)
+        try:
+            Thread.start(self)
+        except:
+            DefaultStep.semaphore.release()
+            raise
 	
 	def run(self):	
         try:
@@ -867,15 +871,11 @@ class	DefaultStep(Thread):
 			
 		else:	
 			### has analysis been done already?
-			try:
-				self.parseManifest()
-				self.completed=True		
-				self.completedpreviously=True
-				self.message("Using data generated previously...")
-	
-			except	IOError, inst:
-				#self.message("Will make new manifest...")
-				pass
+            try:
+                if self.parseManifest():
+                    self.completed=True		
+                    self.completedpreviously=True
+                    self.message("Using data generated previously...")
 			except Exception, inst:	
 				self.message("****ERROR***")	
 				self.message(type(inst))
@@ -899,19 +899,23 @@ class	DefaultStep(Thread):
 		BOH.deregister()
 				
 	def	makeManifest(self):
-		m = open("%s/%s.manifest" % (self.stepdir, self.workpathid), "w")
-				
-		for type, files in self.inputs.items():
-			if len(files)>0:
-				m.write("input\t%s\t%s\n" % (type, ",".join(files)) )
-				
-		for arg, val in self.arguments.items():
-			m.write("argument\t%s\t%s\n" % (arg, val ) )		
-				
-		for type, files in self.outputs.items():
-			if len(files)>0:
-				m.write("output\t%s\t%s\n" % (type, ",".join(files)) )	
-		m.close()
+        pool_open_files.acquire()
+        try:
+		    with open("%s/%s.manifest" % \
+                    (self.stepdir, self.workpathid), "w") as m:
+                        
+                for type, files in self.inputs.items():
+                    if len(files)>0:
+                        m.write("input\t%s\t%s\n" % (type, ",".join(files)) )
+                        
+                for arg, val in self.arguments.items():
+                    m.write("argument\t%s\t%s\n" % (arg, val ) )		
+                        
+                for type, files in self.outputs.items():
+                    if len(files)>0:
+                        m.write("output\t%s\t%s\n" % (type, ",".join(files)) )	
+        finally:
+            pool_open_files.release()
 	
 	def	determineType(self, filename):
 		filename = filename.strip().split(".")
@@ -1068,9 +1072,15 @@ class	DefaultStep(Thread):
 				return current		
 			
 	def	parseManifest(self):
-		fp = open("%s/%s.manifest" % (self.stepdir, self.workpathid), "r")
-		lines=fp.readlines()
-		fp.close()
+        manifest_file = "%s/%s.manifest" % (self.stepdir, self.workpathid)
+        if not os.path.exists(manifest_file):
+            return False
+        pool_open_files.acquire()
+        try:
+            with open(manifest_file,"r") as fp:
+                lines=fp.readlines()
+        finally:
+            pool_open_files.release()
 		for line in lines:
 			line = line.strip("\n").split("\t")
 			if line[0] == "output":
@@ -1088,6 +1098,7 @@ class	DefaultStep(Thread):
 					self.arguments[line[1]] = " "
 				else:
 					self.arguments[line[1]]=line[2]
+        return True
 				
 	def	message(self, text):
 			if type(text) == list:
@@ -1136,8 +1147,8 @@ class	FileImport(DefaultStep):
 		for type in self.inputs.keys():
 			files = self.inputs[type]
 			for file in files:
+                pool_open_files.acquire()
                 try:
-                    pool_open_files.acquire()
                     file = file.split("~")
                     if len(file)>1:
                         file, newname = file
@@ -2170,7 +2181,7 @@ inttab=  "ACGTN"
 outtab = "TGCAN"
 transtab = maketrans(inttab, outtab)
 
-pool_open_files = BoundedSemaphore(value=4, verbose=False)
+pool_open_files = BoundedSemaphore(value=40, verbose=False)
 
 mothurpath  = "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/mothur-current/"
 cdhitpath 	= "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/cdhit-current/"
