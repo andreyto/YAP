@@ -103,7 +103,6 @@ class	BufferedOutputHandler(Thread):
 		command = "%spython %straverser.py" % (binpath, scriptspath)
 		p = Popen(shlex.split(command), stdout = PIPE, stderr = PIPE, close_fds=True)
 		dot, err = p.communicate()
-		p.wait()
 		
 		x = open("workflow.dot", "w")
 		x.write(dot)
@@ -114,7 +113,7 @@ class	BufferedOutputHandler(Thread):
 			command = "%sdot -T%s -o workflow.%s" % (dotpath, format, format) 
 			p = Popen(shlex.split(command), stdin = PIPE, stdout = PIPE, stderr = PIPE, close_fds=True)
 			out, err = p.communicate(dot)
-			p.wait()
+			
 		
 		self.toPrint("-----", "GLOBAL", "Check out workflow.{svg,png,jpg} for an overview of what happened.")
 		self.flush()
@@ -345,7 +344,7 @@ class   TaskQueueStatus(Thread):
 #		
 #		### only 100 recent jobs shown, which could be a problem ;-)   
 #		p = Popen(shlex.split("qstat -s z"), stdout=PIPE, stderr=PIPE, close_fds=True)
-#		p.wait()
+#		
 #		out,err = p.communicate()
 #
 #		lines = out.split("\n")
@@ -368,14 +367,14 @@ class   TaskQueueStatus(Thread):
 				
 	def isJobDone(self, jid):
 		p = Popen(shlex.split("qstat -j %s" % jid), stdout=PIPE, stderr=PIPE, close_fds=True)
-		p.wait()
+		
 		out,err = p.communicate()		
 		return err.find("jobs do not exist")>-1
 		   
 	def pollqueues(self):
 		command="qstat -g c" 
 		p = Popen(shlex.split(command), stdout=PIPE, stderr=PIPE, close_fds=True )
-		p.wait()
+		
 		out,err = p.communicate()
 		
 		if err.find("neither submit nor admin host")==-1:
@@ -518,20 +517,23 @@ class GridTask():
 		sx = ".%s.%s.%s.%s.sh" % (randrange(1,100),randrange(1,100),randrange(1,100),randrange(1,100))
 		
 
-		##### to avoid too many opened files OSError
-		pool_open_files.acquire()
-		### bounded semaphore should limit throttle the files opening for tasks created around the same time	
-		scriptfile, scriptfilepath = tempfile.mkstemp(suffix=sx, prefix=px, dir=self.cwd, text=True)
-		os.close(scriptfile)
-		self.scriptfilepath = scriptfilepath	
-		
-		os.chmod(self.scriptfilepath,  0777 )
-		input= "%s\n" % (self.inputcommand) 
-		scriptfile = open(self.scriptfilepath, "w")
-		scriptfile.write(input)
-		scriptfile.close()
-		pool_open_files.release()
-		####
+        try:
+            ##### to avoid too many opened files OSError
+            pool_open_files.acquire()
+            ### bounded semaphore should limit throttle the files opening for tasks created around the same time
+            try:
+                scriptfile, scriptfilepath = tempfile.mkstemp(suffix=sx, prefix=px, dir=self.cwd, text=True)
+            finally:
+                os.close(scriptfile)
+            self.scriptfilepath = scriptfilepath	
+            
+            os.chmod(self.scriptfilepath,  0777 )
+            input= "%s\n" % (self.inputcommand) 
+            with open(self.scriptfilepath, "w") as scriptfile:
+                scriptfile.write(input)
+        finally:
+            pool_open_files.release()
+            ####
 		
 		
 			
@@ -554,7 +556,7 @@ class GridTask():
 		#print self.command
 		p = Popen(shlex.split(self.command), stdout=PIPE, stderr=PIPE, cwd=self.cwd, close_fds=True)
 		
-		p.wait()
+		
 		out, err = p.communicate()
 		
 		
@@ -976,7 +978,7 @@ class	DefaultStep(Thread):
 					command = "unlink %s" % (file)
 					p = Popen(shlex.split(command), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)	
 					out,err = p.communicate()
-					p.wait()
+					
 
 				else:
 					self.message("kept %s" % file)
@@ -996,7 +998,7 @@ class	DefaultStep(Thread):
 					k="mv %s %s" % (".".join(file), newfilename)
 					p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)	
 					out,err = p.communicate()
-					p.wait()
+					
 
 				self.outputs[self.determineType(newfilename)].add(newfilename)
 						
@@ -1025,7 +1027,7 @@ class	DefaultStep(Thread):
 					command = "cp %s %s" % (file, tmp )
 				p = Popen(shlex.split(command), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True )	
 				out,err = p.communicate()
-				p.wait()
+				
 				toreturn.append(tmp)		
 		#unique	
 		toreturn = set(toreturn)
@@ -1134,23 +1136,24 @@ class	FileImport(DefaultStep):
 		for type in self.inputs.keys():
 			files = self.inputs[type]
 			for file in files:
-				pool_open_files.acquire()
-				file = file.split("~")
-				if len(file)>1:
-					file, newname = file
-					tmp = file.strip().split("/")[-1]
-					k = "cp %s %s.%s" % (file, newname, type)
-					
-				else:
-					file = file[0]
-					tmp = file.strip().split("/")[-1]
-					k ="cp %s imported.%s"	% (file, tmp)
-								
-				p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)
-				self.message(k)
-				out,err = p.communicate()
-				p.wait()
-				pool_open_files.release()
+                try:
+                    pool_open_files.acquire()
+                    file = file.split("~")
+                    if len(file)>1:
+                        file, newname = file
+                        tmp = file.strip().split("/")[-1]
+                        k = "cp %s %s.%s" % (file, newname, type)
+                        
+                    else:
+                        file = file[0]
+                        tmp = file.strip().split("/")[-1]
+                        k ="cp %s imported.%s"	% (file, tmp)
+                                    
+                    p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)
+                    out,err = p.communicate()
+                    self.message(k)
+                finally:
+                    pool_open_files.release()
 				
 class	ArgumentCheck(DefaultStep):
 	def	__init__(self, SHOW, PREV):
