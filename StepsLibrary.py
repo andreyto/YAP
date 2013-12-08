@@ -276,7 +276,7 @@ class   TaskQueueStatus(Thread):
 		self.update = update	
 			
 		#### queue of grid jobs to run
-		self.scheduled = Queue() 
+		self.scheduled = Queue()
 		#### to keep track of things popped off the queue
 		self.processing = dict()
 		
@@ -434,6 +434,17 @@ class   TaskQueueStatus(Thread):
 				#print jid
 				
 				if jid==-1:
+                    #whate happens if SGE is temporarily not availabe: 
+                    #job is marked as running but with
+                    #non-existing job ID -1; it is found as "finished" by the
+                    #next polling cycle and eventually marked as failed by the
+                    #Step thread. However, isJobDone() as it is written will
+                    #not mark such -1 job as done as long as SGE is not
+                    #available. self.pollqueues() will likely raise in that
+                    #case the way it is written now, causing this thread to
+                    #terminate. It appears that this entire class is written 
+                    #under the assumption that SGE never has any timeouts.
+                    #TODO: maybe do self.queue.put(tmp)
 					print "???", tmp
 				
 		
@@ -449,8 +460,12 @@ class   TaskQueueStatus(Thread):
 		return self.bestqueue
 	
 	def register(self, task):
-		self.scheduled.put(task)
+        #this is called from Step threads; it could be preemptied
+        #by other methods in this thread between the next two lines.
+        #The present order should work OK if preemptied by
+        #dispatch()
 		self.registered[task.getUniqueID()]=[-1, "new"]
+		self.scheduled.put(task)
 								
 	def shutdown(self):
 		self.active=False
