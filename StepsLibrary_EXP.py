@@ -1066,37 +1066,38 @@ class	MascotReportLifter(DefaultStep):
 		
 	def	performStep(self):
 		one_at_a_time.acquire()
+        try:
+            
+            file = self.getInputValue("file")
+            id = self.getInputValue("id")
+            script =  "/usr/local/projects/T1D-CNMC/sszpakow/MASCOT_FANTOMJS/MascotAutomaton.js"
+            self.message("caching and reporting on %s in file %s" % (id, file))
+            
+            k = "/home/sszpakow/bin/phantomjs %s %s %s" % (script, file, id)
+            self.message(k)
+            
+            #task = GridTask(template="default", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
+            #task.wait()
+            
+            p = Popen(shlex.split(k), stdout = PIPE, stderr = PIPE, close_fds=True, cwd=self.stepdir)
+            out, err = p.communicate()
+            
+            with open("%s/%s_%s.out.log" % (self.stepdir,\
+                file.strip().split("/")[-1], id ), "w") as f:
+                f.write(out)
+                f.write("\n")
+            
+            with open("%s/%s_%s.err.log" % (self.stepdir,\
+                file.strip().split("/")[-1], id ), "w") as f:
+                f.write(err)
+                f.write("\n")
+            
+            if err.find("'waitFor()' timeout")>-1 or out.find("'waitFor()' timeout"):
+                self.message("Time out detected! %s - %s" % (id, file) )
+                #self.failed=True
+        finally:
 		
-		file = self.getInputValue("file")
-		id = self.getInputValue("id")
-		script =  "/usr/local/projects/T1D-CNMC/sszpakow/MASCOT_FANTOMJS/MascotAutomaton.js"
-		self.message("caching and reporting on %s in file %s" % (id, file))
-		
-		k = "/home/sszpakow/bin/phantomjs %s %s %s" % (script, file, id)
-		self.message(k)
-		
-		#task = GridTask(template="default", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
-		#task.wait()
-		
-		p = Popen(shlex.split(k), stdout = PIPE, stderr = PIPE, close_fds=True, cwd=self.stepdir)
-		out, err = p.communicate()
-		p.wait()
-		
-		f = open("%s/%s_%s.out.log" % (self.stepdir, file.strip().split("/")[-1], id ), "w")
-		f.write(out)
-		f.write("\n")
-		f.close()
-		
-		f = open("%s/%s_%s.err.log" % (self.stepdir, file.strip().split("/")[-1], id ), "w")
-		f.write(err)
-		f.write("\n")
-		f.close()
-		
-		if err.find("'waitFor()' timeout")>-1 or out.find("'waitFor()' timeout"):
-			self.message("Time out detected! %s - %s" % (id, file) )
-			#self.failed=True
-		
-		one_at_a_time.release()
+    		one_at_a_time.release()
 
 class	SED_replace(DefaultStep):
 	def __init__(self, INS, ARGS, PREV,):
