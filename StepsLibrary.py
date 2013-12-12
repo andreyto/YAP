@@ -69,8 +69,8 @@ class	BufferedOutputHandler(Thread):
 			curses.savetty()
 			curses.noecho()
 			curses.cbreak()
-			curses.curs_set(0) 
- 
+			curses.curs_set(0)
+			
 			self.textbuffer= list()
 			self.stdscr.clear()
 			self.stdscr.refresh()
@@ -411,7 +411,7 @@ class   TaskQueueStatus(Thread):
 					if queues[k] >= queues[self.bestqueue]:	
 						self.bestqueue = k			
 						
-			  
+
 ### sanity check, this should match the counters				
 	def pollrunning(self):
 		tmp=defaultdict(int)
@@ -434,17 +434,17 @@ class   TaskQueueStatus(Thread):
 				#print jid
 				
 				if jid==-1:
-                    #whate happens if SGE is temporarily not availabe: 
-                    #job is marked as running but with
-                    #non-existing job ID -1; it is found as "finished" by the
-                    #next polling cycle and eventually marked as failed by the
-                    #Step thread. However, isJobDone() as it is written will
-                    #not mark such -1 job as done as long as SGE is not
-                    #available. self.pollqueues() will likely raise in that
-                    #case the way it is written now, causing this thread to
-                    #terminate. It appears that this entire class is written 
-                    #under the assumption that SGE never has any timeouts.
-                    #TODO: maybe do self.queue.put(tmp)
+					#whate happens if SGE is temporarily not availabe:
+					#job is marked as running but with
+					#non-existing job ID -1; it is found as "finished" by the
+					#next polling cycle and eventually marked as failed by the
+					#Step thread. However, isJobDone() as it is written will
+					#not mark such -1 job as done as long as SGE is not
+					#available. self.pollqueues() will likely raise in that
+					#case the way it is written now, causing this thread to
+					#terminate. It appears that this entire class is written 
+					#under the assumption that SGE never has any timeouts.
+					#TODO: maybe do self.queue.put(tmp)
 					print "???", tmp
 				
 		
@@ -460,10 +460,10 @@ class   TaskQueueStatus(Thread):
 		return self.bestqueue
 	
 	def register(self, task):
-        #this is called from Step threads; it could be preemptied
-        #by other methods in this thread between the next two lines.
-        #The present order should work OK if preemptied by
-        #dispatch()
+	#this is called from Step threads; it could be preemptied
+	#by other methods in this thread between the next two lines.
+	#The present order should work OK if preemptied by
+	#dispatch()
 		self.registered[task.getUniqueID()]=[-1, "new"]
 		self.scheduled.put(task)
 								
@@ -503,7 +503,7 @@ class GridTask():
 		self.cwd=cwd
 		self.project = __projectid__
 		self.email = __email__
-	  
+	
 		### remove *e##, *pe## *o## *po##  
 		self.retainstreams=" -o /dev/null -e /dev/null "
 		
@@ -532,26 +532,22 @@ class GridTask():
 		sx = ".%s.%s.%s.%s.sh" % (randrange(1,100),randrange(1,100),randrange(1,100),randrange(1,100))
 		
 
-        ##### to avoid too many opened files OSError
-        pool_open_files.acquire()
-        ### bounded semaphore should limit throttle the files opening for tasks created around the same time
-        try:
-            try:
-                scriptfile, scriptfilepath = tempfile.mkstemp(suffix=sx, prefix=px, dir=self.cwd, text=True)
-            finally:
-                os.close(scriptfile)
-            self.scriptfilepath = scriptfilepath	
-            
-            os.chmod(self.scriptfilepath,  0777 )
-            input= "%s\n" % (self.inputcommand) 
-            with open(self.scriptfilepath, "w") as scriptfile:
-                scriptfile.write(input)
-        finally:
-            pool_open_files.release()
-            ####
-		
-		
-			
+		##### to avoid too many opened files OSError
+		pool_open_files.acquire()
+		### bounded semaphore should limit throttle the files opening for tasks created around the same time
+		try:
+			try:
+				scriptfile, scriptfilepath = tempfile.mkstemp(suffix=sx, prefix=px, dir=self.cwd, text=True)
+			finally:
+				os.close(scriptfile)
+			self.scriptfilepath = scriptfilepath
+			os.chmod(self.scriptfilepath,  0777 )
+			input= "%s\n" % (self.inputcommand)
+			with open(self.scriptfilepath, "w") as scriptfile:
+				scriptfile.write(input)
+		finally:
+		    pool_open_files.release()
+		    ####
 		self.templates=dict()
 		self.templates["himem.q"]	  = 'qsub %s -P %s -N jh.%s -cwd -pe threaded %s -l "himem" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, cpu, self.email, holdfor, self.scriptfilepath)	
 		self.templates["default.q"]	 = 'qsub %s -P %s -N jd.%s -cwd -pe threaded %s -M %s -m a %s "%s" ' % (self.retainstreams, self.project, name, cpu,  self.email, holdfor,  self.scriptfilepath)
@@ -697,15 +693,12 @@ class GeneralPurposeParser:
 	### The mother of all Steps:
 	###
 class	DefaultStep(Thread):
-    
-    #This limits the number of concurrent ("submitted") step instances,
-    #in other words, the number of threads on which start() has been 
-    #called. The code creating instances of derived classes will block
-    #until the semaphore is acquired.
-    semaphore = BoundedSemaphore(100)
-	
-    def __init__(self):
-		
+	#This limits the number of concurrent ("submitted") step instances,
+	#in other words, the number of threads on which start() has been 
+	#called. The code creating instances of derived classes will block
+	#until the semaphore is acquired.
+	semaphore = BoundedSemaphore(100)
+	def __init__(self):
 		#### thread init
 		Thread.__init__(self)
 		self.random = uniform(0, 10000)
@@ -764,44 +757,42 @@ class	DefaultStep(Thread):
 	def setName(self, x):
 		self.stepname=x
 
-    #override the start method to make sure that we do not
-    #generate any exceptions in our code between acquiring semaphore
-    #and calling Thread.start()
-    def start(self):
-        DefaultStep.semaphore.acquire()
-        try:
-            Thread.start(self)
-        except:
-            DefaultStep.semaphore.release()
-            raise
+	#override the start method to make sure that we do not
+	#generate any exceptions in our code between acquiring semaphore
+	#and calling Thread.start()
+	def start(self):
+		DefaultStep.semaphore.acquire()
+		try:
+			Thread.start(self)
+		except:
+			DefaultStep.semaphore.release()
+			raise
 	
-	def run(self):	
-        try:
-            self.init()
-
-            if self.failed:
-                #self.message("Error detected... ")
-                BOH.deregister()
-                self.completed=True
-                
-            elif not self.isDone():
-                try:
-                    self.performStep()
-                    self.finalize()
-                except Exception, inst:	
-                    self.message("...")
-                    self.message( type(inst))
-                    self.message( inst)
-                    BOH.deregister()
-                    self.completed=True
-                    self.failed=True
-            else:
-                self.message("Completed (previously).")	
-                BOH.deregister()
-                self.completed=True
-                self.completedpreviously=True
-        finally:
-            DefaultStep.semaphore.release()
+	def run(self):
+		try:
+			self.init()
+			if self.failed:
+				#self.message("Error detected... ")
+				BOH.deregister()
+				self.completed=True
+			elif not self.isDone():
+				try:
+					self.performStep()
+					self.finalize()
+				except Exception, inst:	
+					self.message("...")
+					self.message( type(inst))
+					self.message( inst)
+					BOH.deregister()
+					self.completed=True
+					self.failed=True
+			else:
+				self.message("Completed (previously).")	
+				BOH.deregister()
+				self.completed=True
+				self.completedpreviously=True
+		finally:
+			DefaultStep.semaphore.release()
 		
 	def	performStep():
 		self.message("in a step...")
@@ -886,11 +877,11 @@ class	DefaultStep(Thread):
 			
 		else:	
 			### has analysis been done already?
-            try:
-                if self.parseManifest():
-                    self.completed=True		
-                    self.completedpreviously=True
-                    self.message("Using data generated previously...")
+			try:
+				if self.parseManifest():
+					self.completed=True
+					self.completedpreviously=True
+					self.message("Using data generated previously...")
 			except Exception, inst:	
 				self.message("****ERROR***")	
 				self.message(type(inst))
@@ -914,23 +905,20 @@ class	DefaultStep(Thread):
 		BOH.deregister()
 				
 	def	makeManifest(self):
-        pool_open_files.acquire()
-        try:
-		    with open("%s/%s.manifest" % \
-                    (self.stepdir, self.workpathid), "w") as m:
-                        
-                for type, files in self.inputs.items():
-                    if len(files)>0:
-                        m.write("input\t%s\t%s\n" % (type, ",".join(files)) )
-                        
-                for arg, val in self.arguments.items():
-                    m.write("argument\t%s\t%s\n" % (arg, val ) )		
-                        
-                for type, files in self.outputs.items():
-                    if len(files)>0:
-                        m.write("output\t%s\t%s\n" % (type, ",".join(files)) )	
-        finally:
-            pool_open_files.release()
+		pool_open_files.acquire()
+		try:
+			with open("%s/%s.manifest" % \
+				  (self.stepdir, self.workpathid), "w") as m:
+				for type, files in self.inputs.items():
+					if len(files)>0:
+						m.write("input\t%s\t%s\n" % (type, ",".join(files)) )
+				for arg, val in self.arguments.items():
+					m.write("argument\t%s\t%s\n" % (arg, val ) )
+				for type, files in self.outputs.items():
+					if len(files)>0:
+						m.write("output\t%s\t%s\n" % (type, ",".join(files)) )
+		finally:
+			pool_open_files.release()
 	
 	def	determineType(self, filename):
 		filename = filename.strip().split(".")
@@ -1087,33 +1075,33 @@ class	DefaultStep(Thread):
 				return current		
 			
 	def	parseManifest(self):
-        manifest_file = "%s/%s.manifest" % (self.stepdir, self.workpathid)
-        if not os.path.exists(manifest_file):
-            return False
-        pool_open_files.acquire()
-        try:
-            with open(manifest_file,"r") as fp:
-                lines=fp.readlines()
-        finally:
-            pool_open_files.release()
+		manifest_file = "%s/%s.manifest" % (self.stepdir, self.workpathid)
+		if not os.path.exists(manifest_file):
+			return False
+		pool_open_files.acquire()
+		try:
+			with open(manifest_file,"r") as fp:
+				lines=fp.readlines()
+		finally:
+			pool_open_files.release()
 		for line in lines:
 			line = line.strip("\n").split("\t")
-			if line[0] == "output":
-				type = line[1]
-				files = line[2].split(",")
-				for file in files:
-					self.outputs[type].add(file)
-			elif line[0] == "input":
-				type = line[1] 
-				files = line[2].split(",")
-				for file in files:
-					self.inputs[type].add(file)	
-			elif line[0] == "argument":
-				if len(line)==2:
-					self.arguments[line[1]] = " "
-				else:
-					self.arguments[line[1]]=line[2]
-        return True
+		if line[0] == "output":
+			type = line[1]
+			files = line[2].split(",")
+			for file in files:
+				self.outputs[type].add(file)
+		elif line[0] == "input":
+			type = line[1] 
+			files = line[2].split(",")
+			for file in files:
+				self.inputs[type].add(file)	
+		elif line[0] == "argument":
+			if len(line)==2:
+				self.arguments[line[1]] = " "
+			else:
+				self.arguments[line[1]]=line[2]
+		return True
 				
 	def	message(self, text):
 			if type(text) == list:
@@ -1156,30 +1144,28 @@ class	FileImport(DefaultStep):
 		#self.setArguments(ARGS)
 		#self.setPrevious(PREV)
 		self.setName("FILE_input")
-	 	self.start()
+		self.start()
 			
 	def	performStep(self):
 		for type in self.inputs.keys():
 			files = self.inputs[type]
 			for file in files:
-                pool_open_files.acquire()
-                try:
-                    file = file.split("~")
-                    if len(file)>1:
-                        file, newname = file
-                        tmp = file.strip().split("/")[-1]
-                        k = "cp %s %s.%s" % (file, newname, type)
-                        
-                    else:
-                        file = file[0]
-                        tmp = file.strip().split("/")[-1]
-                        k ="cp %s imported.%s"	% (file, tmp)
-                                    
-                    p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)
-                    out,err = p.communicate()
-                    self.message(k)
-                finally:
-                    pool_open_files.release()
+				pool_open_files.acquire()
+				try:
+					file = file.split("~")
+					if len(file)>1:
+						file, newname = file
+						tmp = file.strip().split("/")[-1]
+						k = "cp %s %s.%s" % (file, newname, type)
+					else:
+						file = file[0]
+						tmp = file.strip().split("/")[-1]
+						k ="cp %s imported.%s"	% (file, tmp)
+					p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)
+					out,err = p.communicate()
+					self.message(k)
+				finally:
+					pool_open_files.release()
 				
 class	ArgumentCheck(DefaultStep):
 	def	__init__(self, SHOW, PREV):
@@ -1191,7 +1177,7 @@ class	ArgumentCheck(DefaultStep):
 		self.setName("ArgCheck")
 		#self.nodeCPUs=nodeCPUs
 		self.removeinputs=False
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		x = self.getInputValue("show")
@@ -1210,7 +1196,7 @@ class	OutputStep(DefaultStep):
 		self.setName("OUTPUT_%s" % (NAME))
 		#self.nodeCPUs=nodeCPUs
 		self.removeinputs=False
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		x = self.getInputValue("show")
@@ -1252,14 +1238,14 @@ class	SFFInfoStep(DefaultStep):
 	
 class	MothurStep(DefaultStep):
 	def __init__(self, NM, nodeCPUs, INS, ARGS, PREV):
-	 	DefaultStep.__init__(self)
-	 	self.setInputs(INS)
+		DefaultStep.__init__(self)
+		self.setInputs(INS)
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName(NM)
 		self.nodeCPUs=nodeCPUs
 		self.start()
-	 			 
+	
 	def	makeCall(self):
 		FORCE = self.getInputValue("force")
 		x = MOTHUR.getCommandInfo(self.stepname)
@@ -1361,9 +1347,9 @@ class	MothurSHHH(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("MPyro")
 		####
-		####self.nodeCPUs=nodeCPUs	
-	 	self.nodeCPUs=4
-	 	self.start()
+		####self.nodeCPUs=nodeCPUs
+		self.nodeCPUs=4
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1424,7 +1410,7 @@ class	LUCYcheck(DefaultStep):
 		self.nodeCPUs=nodeCPUs
 		if self.nodeCPUs>32:
 			self.nodeCPUs=30
-	 	self.start()
+		self.start()
 				
 	def	performStep(self):
 		f = self.find("fasta")[0]
@@ -1454,7 +1440,7 @@ class	LUCYtrim(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("LUCY_trim")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 				
 	def	performStep(self):
@@ -1474,7 +1460,7 @@ class	MatchGroupsToFasta(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("MatchGroups")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1502,7 +1488,7 @@ class	MatchGroupsToList(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("MatchGroups")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1527,7 +1513,7 @@ class	FileMerger(DefaultStep):
 		self.setName("FILE_cat")
 		#self.nodeCPUs=nodeCPUs
 		self.prefix = prefix
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1560,7 +1546,7 @@ class	FileSort(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_sort")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1583,7 +1569,7 @@ class	FileType(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_type")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1607,7 +1593,7 @@ class	CleanFasta(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("CleanFasta")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1626,7 +1612,7 @@ class	MakeNamesFile(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_names")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		files = self.find("fasta")
@@ -1653,7 +1639,7 @@ class	MakeGroupsFile(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_groups")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		files = self.find("fasta")
@@ -1679,7 +1665,7 @@ class	MakeQualFile(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_qfile")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 		
 	def	performStep(self):
@@ -1704,7 +1690,7 @@ class 	AlignmentSummary(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("AlignmentSummary")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		self.project = __projectid__
@@ -1744,7 +1730,7 @@ class	AlignmentPlot(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("AlignmentPlot")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		f = self.find("alsum")[0]
@@ -1788,8 +1774,8 @@ class	GroupRetriever(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("GroupCheck")
-	 	self.start()
-	 	
+		self.start()
+		
 	def performStep(self):
 		minimum = self.getInputValue("mingroupmembers")
 		if minimum==None:
@@ -1831,7 +1817,7 @@ class	GroupRetriever(DefaultStep):
 		else:
 			groupnames  = "-".join(failinggroups)	
 		self.setOutputValue("groups", groupnames)
-	 	
+
 class	CDHIT_454(DefaultStep):
 	def __init__(self, nodeCPUs, ARGS, PREV):
 		DefaultStep.__init__(self)
@@ -1915,7 +1901,7 @@ class	CDHIT_Perls(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("CDHITperls")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		x = self.find("cdhitclstr")
@@ -2198,10 +2184,10 @@ transtab = maketrans(inttab, outtab)
 
 pool_open_files = BoundedSemaphore(value=40, verbose=False)
 
-mothurpath  = "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/mothur-current/"
-cdhitpath 	= "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/cdhit-current/"
-scriptspath = "/usr/local/devel/ANNOTATION/sszpakow/YAP/scripts/"
-binpath 	= "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/"
+mothurpath  = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/mothur-current/"
+cdhitpath 	= "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/cdhit-current/"
+scriptspath = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/scripts/"
+binpath 	= "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/"
 dotpath		= "/usr/local/packages/graphviz/bin/"
 
 defaulttemplate = "default.q"

@@ -148,7 +148,7 @@ class	Bowtie1 (DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("BOWTIE1aligner")
 		self.counter=0
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -173,8 +173,8 @@ class	Bowtie1 (DefaultStep):
 
 			if "%s.mate2" % (name) in m2:
 				k = "bowtie %s -1 %s.mate1 -2 %s.mate2 > %s.bowtie1alignment" % (argstring, name, name, name)
-		 		#self.message(k)
-		 		task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)	
+				#self.message(k)
+				task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)	
 				tasks.append(task)
 			else:
 				self.message("skipping: %s" % (name))
@@ -198,7 +198,7 @@ class	TilingFasta(DefaultStep):
 		#self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("TilingFasta")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -230,7 +230,7 @@ class	Bowtie2 (DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("BOWTIE2aligner")
 		self.counter=0
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -257,12 +257,11 @@ class	Bowtie2 (DefaultStep):
 
 			if "%s.mate2" % (name) in m2:
 				k = "~/bin/bowtie2 %s -q -1 %s.mate1 -2 %s.mate2 -S %s.sam" % (argstring, name, name, name)
-		 		if counter==1:
-		 			self.message(k)
-		 		elif counter==2:
-		 			self.message("processing %s file(s)..." % (jobs))
-		 			
-		 		task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)	
+				if counter==1:
+					self.message(k)
+				elif counter==2:
+					self.message("processing %s file(s)..." % (jobs))
+				task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)
 				tasks.append(task)
 			else:
 				self.message("skipping: %s" % (name))
@@ -274,9 +273,9 @@ class	Bowtie2 (DefaultStep):
 			name = ".".join(f.strip().split(".")[:-1])
 			k = "~/bin/bowtie2 %s -f -U %s -S %s.sam" % (argstring, f, name)
 			if counter==1:
-		 		self.message(k)
-	 		elif counter==2:
-	 			self.message("processing %s file(s)..." % (jobs))
+				self.message(k)
+			elif counter==2:
+				self.message("processing %s file(s)..." % (jobs))
 			task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)	
 			tasks.append(task)
 								
@@ -318,9 +317,9 @@ class	AwkCommand(DefaultStep):
 			newname = "%s%s" % (newname, newtype)
 			k = "awk '%s' %s %s > %s" % (awk, f, postprocessing, newname)
 			if counter==1:
-		 		self.message(k)
-	 		elif counter==2:
-	 			self.message("processing %s file(s)..." % (len(files)))	
+				self.message(k)
+			elif counter==2:
+				self.message("processing %s file(s)..." % (len(files)))	
 			task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
 			tasks.append(task)
 				
@@ -335,8 +334,7 @@ class	ContaminantRemoval(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("decontaminate")
-
-	 	self.start()	
+		self.start()	
 		 	
 	def	performStep(self):
 		tasks = list()
@@ -395,7 +393,7 @@ class	SingletonsFishOut(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("fishing")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		singletons = self.find("singletons")
@@ -432,7 +430,7 @@ class	fastx_quality_stats(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("fastx_qstats")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -462,7 +460,7 @@ class	fastq_quality_filter(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("fastq_qfilter")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -495,7 +493,7 @@ class	fastq2fasta(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("fastq2fasta")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -533,7 +531,7 @@ class	mateInterweave(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("mateInterweave")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -575,7 +573,7 @@ class	MateMerge(DefaultStep):
 		self.setName("MATE_cat")
 		#self.nodeCPUs=nodeCPUs
 		self.prefix = prefix
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		m1 = self.find("mate1")
@@ -593,7 +591,7 @@ class	CLC_Assemble(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("CLC_Assemble")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -641,7 +639,7 @@ class	CLC_Assemble_Ref(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("CLC_Assemble_Ref")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -708,7 +706,7 @@ class	CLC_Assemble_Info(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("CLC_Assemble_Info")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		for f in self.find("cas"):	
@@ -725,7 +723,7 @@ class	ContigCoverageUpdate(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("ContigCovUp")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		table = self.find("clcassemblystats")
@@ -752,7 +750,7 @@ class	ORFCoverage(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("ORFCoverage")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -780,7 +778,7 @@ class	ORFCoverageNorm(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("ORFCoverageNorm")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -801,7 +799,7 @@ class	PROKModify(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("ProkModify")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -827,7 +825,7 @@ class	CLC_Assemble_Table(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("CLC_Assemble_Table")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		x = self.find ("fasta")
@@ -860,7 +858,7 @@ class	FastaSummaryRPlots(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FastaSummary")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		self.find("fasta")
@@ -877,7 +875,7 @@ class	ClearcutTree(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("ClearcutTree")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		x = self.find("fasta")
@@ -895,7 +893,7 @@ class	SQA(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("SolexaQA")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		files= list()
@@ -926,7 +924,7 @@ class	SQAtrim(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("DynamicTrim")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		files= list()
@@ -966,7 +964,7 @@ class	SQAlenfil(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("LengthSort")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		M1 = list()
@@ -1037,7 +1035,7 @@ class	GuessFastQEncoding(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FastQEnc")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 	
@@ -1062,42 +1060,37 @@ class	MascotReportLifter(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("MascotLifter")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		one_at_a_time.acquire()
-        try:
-            
-            file = self.getInputValue("file")
-            id = self.getInputValue("id")
-            script =  "/usr/local/projects/T1D-CNMC/sszpakow/MASCOT_FANTOMJS/MascotAutomaton.js"
-            self.message("caching and reporting on %s in file %s" % (id, file))
-            
-            k = "/home/sszpakow/bin/phantomjs %s %s %s" % (script, file, id)
-            self.message(k)
-            
-            #task = GridTask(template="default", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
-            #task.wait()
-            
-            p = Popen(shlex.split(k), stdout = PIPE, stderr = PIPE, close_fds=True, cwd=self.stepdir)
-            out, err = p.communicate()
-            
-            with open("%s/%s_%s.out.log" % (self.stepdir,\
-                file.strip().split("/")[-1], id ), "w") as f:
-                f.write(out)
-                f.write("\n")
-            
-            with open("%s/%s_%s.err.log" % (self.stepdir,\
-                file.strip().split("/")[-1], id ), "w") as f:
-                f.write(err)
-                f.write("\n")
-            
-            if err.find("'waitFor()' timeout")>-1 or out.find("'waitFor()' timeout"):
-                self.message("Time out detected! %s - %s" % (id, file) )
-                #self.failed=True
-        finally:
-		
-    		one_at_a_time.release()
+		try:
+			file = self.getInputValue("file")
+			id = self.getInputValue("id")
+			script =  "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/ANNOTATION/MascotAutomaton.js"
+			self.message("caching and reporting on %s in file %s" % (id, file))
+			k = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/phantomjs %s %s %s" % (script, file, id)
+			self.message(k)
+
+			#task = GridTask(template="default", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
+			#task.wait()
+			p = Popen(shlex.split(k), stdout = PIPE, stderr = PIPE, close_fds=True, cwd=self.stepdir)
+			out, err = p.communicate()
+			
+			with open("%s/%s_%s.out.log" % (self.stepdir,\
+				file.strip().split("/")[-1], id ), "w") as f:
+				f.write(out)
+				f.write("\n")
+			with open("%s/%s_%s.err.log" % (self.stepdir,\
+				file.strip().split("/")[-1], id ), "w") as f:
+				f.write(err)
+				f.write("\n")
+
+			if err.find("'waitFor()' timeout")>-1 or out.find("'waitFor()' timeout"):
+				self.message("Time out detected! %s - %s" % (id, file) )
+				#self.failed=True
+		finally:
+			one_at_a_time.release()
 
 class	SED_replace(DefaultStep):
 	def __init__(self, INS, ARGS, PREV,):
@@ -1136,7 +1129,7 @@ class	FileMiniImport(DefaultStep):
 		self.setArguments(ARGS)
 		#self.setPrevious(PREV)
 		self.setName("FILE_mini_input")
-	 	self.start()
+		self.start()
 			
 	def	performStep(self):
 		
@@ -1184,7 +1177,7 @@ class	FileSplit(DefaultStep):
 		self.setName("FILE_split")
 		#self.nodeCPUs=nodeCPUs
 		self.chunk = 0
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1205,8 +1198,8 @@ class	FileSplit(DefaultStep):
 			newfile = file.strip().split(".")
 			suffix = newfile[-3:]
 			suffix.reverse()
- 			newfile = "%s.%s" % ( ".".join(newfile[:-3]), ".".join(suffix))
- 			#self.message("%s -> %s" % (file, newfile) )
+			newfile = "%s.%s" % ( ".".join(newfile[:-3]), ".".join(suffix))
+			#self.message("%s -> %s" % (file, newfile) )
 			command = "mv %s %s" % (file, newfile)
 			p = Popen(shlex.split(command), close_fds=True)
 			p.wait()
@@ -1217,7 +1210,7 @@ class	FastaSplit(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("FASTA_split")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1238,7 +1231,7 @@ class	FastaSort(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("FASTA_sort")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1258,7 +1251,7 @@ class	BLAST(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("BLAST")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1302,7 +1295,7 @@ class	FileTypeTrim(DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("FILE_typetrim")
 		#self.nodeCPUs=nodeCPUs
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1327,7 +1320,7 @@ class	Flash (DefaultStep):
 		self.setPrevious(PREV)
 		self.setName("Flash")
 		self.counter=0
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1347,12 +1340,11 @@ class	Flash (DefaultStep):
 
 			if "%s.mate2" % (name) in m2:
 				k = "%sflash %s.mate1 %s.mate2 %s -o %s; mv %s.notCombined_1.fastq %s.notC.mate1; mv %s.notCombined_2.fastq %s.notC.mate2" % (binpath, name, name, argstring, name, name, name, name, name)
-		 		if counter==1:
-		 			self.message(k)
-		 		elif counter==2:
-		 			self.message("processing %s file(s)..." % (jobs))
-		 			
-		 		task = GridTask(template="pick", name=self.stepname, command=k, cpu=1, dependson=list(), cwd = self.stepdir, debug=False)	
+				if counter==1:
+					self.message(k)
+				elif counter==2:
+					self.message("processing %s file(s)..." % (jobs))
+				task = GridTask(template="pick", name=self.stepname, command=k, cpu=1, dependson=list(), cwd = self.stepdir, debug=False)	
 				tasks.append(task)
 			else:
 				self.message("skipping: %s" % (name))
@@ -1367,7 +1359,7 @@ class	PrimerClipper(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("PrimerClipper")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1401,7 +1393,7 @@ class	FastaHeadHash(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("FastaHeadHash")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		tasks = list()
@@ -1434,7 +1426,7 @@ class	OtuTable(DefaultStep):
 		self.setArguments(ARGS)
 		self.setPrevious(PREV)
 		self.setName("OtuTable")
-	 	self.start()
+		self.start()
 		
 	def	performStep(self):
 		
@@ -1461,7 +1453,7 @@ def getQ(file):
 #################################################
 
 one_at_a_time = BoundedSemaphore(value=2, verbose=False)
-sqapath = "/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/solexaQA-current/"
+sqapath = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/solexaQA-current/"
 
 
 #################################################
