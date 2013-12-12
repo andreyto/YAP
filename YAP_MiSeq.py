@@ -756,7 +756,8 @@ REF_3 = MakeQualFile  ([REF], "40" )
 
 supplementary = list()
 READY = preprocess()
-OutputStep("1-PREPROCESS", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", READY)
+O = list()
+O.append(OutputStep("1-PREPROCESS", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", READY))
 
 if options.sampletimes==0:
     tmp = finalize(READY)    
@@ -764,8 +765,8 @@ if options.sampletimes==0:
     z = R_OTUplots(dict(), dict(), tmp)
     supplementary.append(y)
     supplementary.append(z)
-    OutputStep("6-ENTIRE", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", [tmp])
-    OutputStep("8-TBC", "phylotax,group,list,fasta", [tmp])
+    O.append(OutputStep("6-ENTIRE", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", [tmp]))
+    O.append(OutputStep("8-TBC", "phylotax,group,list,fasta", [tmp]))
     
 #else:
 #    thefinalset = list()
@@ -784,7 +785,11 @@ if options.sampletimes==0:
 #        OutputStep("SAMPLED_%s" % (k), "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", [tmp])
 #        thefinalset.append(tmp)
 #    
-OutputStep("7-SUPP_PLOTS", "tre,pdf,png,svg,tiff,r_nseqs,rarefaction,r_simpson,r_invsimpson,r_chao,r_shannon,r_shannoneven,r_coverage", supplementary)
+O.append(OutputStep("7-SUPP_PLOTS", "tre,pdf,png,svg,tiff,r_nseqs,rarefaction,r_simpson,r_invsimpson,r_chao,r_shannon,r_shannoneven,r_coverage", supplementary))
+
+for o in O:
+    o.join()
+
     
     
 ###########################################################################    
