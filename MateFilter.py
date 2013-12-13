@@ -5,7 +5,7 @@
 ########################################################################################
 
 #################################################
-## 	filter mates to keep pairs
+##  filter mates to keep pairs
 #################################################
 import sys
 from optparse import OptionParser
@@ -16,52 +16,52 @@ _date="2011/01/01"
 _version="Version 1"
 
 #################################################
-##		Classes
+##      Classes
 ##
-	#################################################
-	### Iterator over input file.
-	### every line is converted into a dictionary with variables referred to by their 
-	### header name
-class 	GeneralPurposeParser:
-	def	__init__(self, file, skip=0, sep="\t"):
-		self.filename = file
-		self.fp = open(self.filename, "r")	
-		self.sep = sep
-		self.linecounter = 0
-		self.currline=""
-		
-	def	__iter__(self):
-		return (self)
-	
-	def	next(self):
-		otpt = dict()
-		for currline in self.fp:
-			currline = currline.strip().split(self.sep)
-			self.currline = currline
-			self.linecounter = self.linecounter + 1
-			return(currline)			
-		raise StopIteration
-					
-	def	__str__(self):
-		return "%s [%s]\n\t%s" % (self.filename, self.linecounter, self.currline)
+    #################################################
+    ### Iterator over input file.
+    ### every line is converted into a dictionary with variables referred to by their 
+    ### header name
+class   GeneralPurposeParser:
+    def __init__(self, file, skip=0, sep="\t"):
+        self.filename = file
+        self.fp = open(self.filename, "r")  
+        self.sep = sep
+        self.linecounter = 0
+        self.currline=""
+        
+    def __iter__(self):
+        return (self)
+    
+    def next(self):
+        otpt = dict()
+        for currline in self.fp:
+            currline = currline.strip().split(self.sep)
+            self.currline = currline
+            self.linecounter = self.linecounter + 1
+            return(currline)            
+        raise StopIteration
+                    
+    def __str__(self):
+        return "%s [%s]\n\t%s" % (self.filename, self.linecounter, self.currline)
 #################################################
-##		Functions
+##      Functions
 ##
-	################################################
-	### Read in a file and return a list of lines
-	###
-def	loadLines(x):
-	try:
-		fp = open(x, "r")
-		cont=fp.readlines()
-		fp.close()
-		#print "%s line(s) loaded."  % (len(cont))
-	except:
-		cont=""
-		#print "%s cannot be opened, does it exist? " % ( x )	
-	return cont
+    ################################################
+    ### Read in a file and return a list of lines
+    ###
+def loadLines(x):
+    try:
+        fp = open(x, "r")
+        cont=fp.readlines()
+        fp.close()
+        #print "%s line(s) loaded."  % (len(cont))
+    except:
+        cont=""
+        #print "%s cannot be opened, does it exist? " % ( x )   
+    return cont
 #################################################
-##		Arguments
+##      Arguments
 ##
 parser = OptionParser()
 
@@ -84,46 +84,46 @@ parser.add_option("-s", "--suffix", dest="suffix", default="filt",
 (options, args) = parser.parse_args()
 
 #################################################
-##		Begin
+##      Begin
 ##
 
 if options.fn_filter != "":
-	keep = False
-	names = [x.strip().split()[0].strip("@") for x in loadLines(options.fn_filter)]
-	names = set(names)
-	
+    keep = False
+    names = [x.strip().split()[0].strip("@") for x in loadLines(options.fn_filter)]
+    names = set(names)
+    
 elif options.fn_keep != "":
-	keep = True
-	names = [x.strip().split()[0].strip("@") for x in loadLines(options.fn_keep)]
-	names = set(names)	
+    keep = True
+    names = [x.strip().split()[0].strip("@") for x in loadLines(options.fn_keep)]
+    names = set(names)  
 
 else:
-	print "keep or filter required"
-	parser.print_help()
-	sys.exit(1)
+    print "keep or filter required"
+    parser.print_help()
+    sys.exit(1)
 
 for file in options.fn_input.strip().split(","):
-	
-	
-	filename = file.strip().split("/")[-1]
-	ext = filename.split(".")[-1]
-	filename = "%s.%s.%s" % (".".join(filename.split(".")[:-1]), options.suffix, ext)
-	
-	file_in = open(file, "r")
-	file_out = open(filename, "w")
-	
-	for record in SeqIO.parse(file_in, options.file_format) :
-		recid = record.id.split()[0].strip("@")
-		found = recid in names
-		if ( found and keep ) or ( not found and not keep ) :
-			#outputs.append(record)	
-			SeqIO.write([record], file_out, options.file_format)	
-			names.discard(recid)		
-		else:
-			print "filtering out:", record.id
-								
-	file_in.close()	
-	file_out.close()
+    
+    
+    filename = file.strip().split("/")[-1]
+    ext = filename.split(".")[-1]
+    filename = "%s.%s.%s" % (".".join(filename.split(".")[:-1]), options.suffix, ext)
+    
+    file_in = open(file, "r")
+    file_out = open(filename, "w")
+    
+    for record in SeqIO.parse(file_in, options.file_format) :
+        recid = record.id.split()[0].strip("@")
+        found = recid in names
+        if ( found and keep ) or ( not found and not keep ) :
+            #outputs.append(record) 
+            SeqIO.write([record], file_out, options.file_format)    
+            names.discard(recid)        
+        else:
+            print "filtering out:", record.id
+                                
+    file_in.close() 
+    file_out.close()
 #################################################
-##		Finish
+##      Finish
 #################################################

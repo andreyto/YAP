@@ -5,7 +5,7 @@
 ########################################################################################
 
 #################################################
-## 	Trim an alignment
+##  Trim an alignment
 #################################################
 import sys, time, random, hashlib, shlex, os, itertools, gc
 from optparse import OptionParser
@@ -18,26 +18,26 @@ _date="2011/01/01"
 _version="Version 1"
 
 #################################################
-##		Classes
+##      Classes
 ##
 
 #################################################
-##		Functions
+##      Functions
 ##
-def	cleanup(recordlist, start, end):
-	otpt=list()
-	for rec in recordlist:
-		# we want to keep first and last base as reported
-		# upon examination of the alignment the start coordinate needs to be adjusted.
-		# alignment summary reports starting with 1, string coordinates are 0 based
-	
-		seq = str(rec.seq)[start-1:end]
-		tmp = SeqRecord(seq=Seq(seq), id=rec.id, name=rec.id, description=rec.id)
-		otpt.append(tmp)
-	return (otpt)
+def cleanup(recordlist, start, end):
+    otpt=list()
+    for rec in recordlist:
+        # we want to keep first and last base as reported
+        # upon examination of the alignment the start coordinate needs to be adjusted.
+        # alignment summary reports starting with 1, string coordinates are 0 based
+    
+        seq = str(rec.seq)[start-1:end]
+        tmp = SeqRecord(seq=Seq(seq), id=rec.id, name=rec.id, description=rec.id)
+        otpt.append(tmp)
+    return (otpt)
 
 #################################################
-##		Arguments
+##      Arguments
 ##
 parser = OptionParser()
 
@@ -59,7 +59,7 @@ parser.add_option("-e", "--end", type="int", dest="end",
 (options, args) = parser.parse_args()
 
 #################################################
-##		Begin
+##      Begin
 ##
 
 inputfilename = options.inputname
@@ -75,5 +75,5 @@ output_handle.close()
 
 
 #################################################
-##		Finish
+##      Finish
 #################################################
