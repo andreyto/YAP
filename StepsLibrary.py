@@ -323,8 +323,7 @@ class   TaskQueueStatus(ReportingThread):
         self.start()
             
     def do_run(self):
-        BOH.outputUpdate("Setting up the grid...")
-        print "Setting up grid..."
+        BOH.toPrint("-----","BATCH","Setting up the grid...")
         time.sleep(5)
         while activeCount()>3 or self.running>0 or self.scheduled.qsize()>0:
 
@@ -334,12 +333,12 @@ class   TaskQueueStatus(ReportingThread):
             self.dispatch()
             self.cleanup()
             
-            BOH.outputUpdate("%s" % (self))
+            BOH.toPrint("-----","BATCH","{}".format(self))
             #print self
             
             time.sleep(self.update)
         
-        BOH.outputUpdate("%s\nGrid Offline." % (self))
+        BOH.toPrint("-----","BATCH","{}\nGrid Offline.".format(self))
         
         print self  
         print "Queue status shutting down."
