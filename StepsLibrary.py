@@ -736,7 +736,7 @@ class   DefaultStep(ReportingThread):
     #in other words, the number of threads on which start() has been 
     #called. The code creating instances of derived classes will block
     #until the semaphore is acquired.
-    semaphore = BoundedSemaphore(100)
+    semaphore = BoundedSemaphore(500)
     def __init__(self):
         #### thread init
         ReportingThread.__init__(self)
@@ -2221,7 +2221,7 @@ inttab=  "ACGTN"
 outtab = "TGCAN"
 transtab = maketrans(inttab, outtab)
 
-pool_open_files = BoundedSemaphore(value=40, verbose=False)
+pool_open_files = BoundedSemaphore(value=400, verbose=False)
 
 mothurpath  = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/mothur-current/"
 cdhitpath   = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/cdhit-current/"
