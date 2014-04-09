@@ -9,7 +9,7 @@
 ##    OTUs (certain regions of 16S and ITS supported)
 ##    This is for demultiplexed MiSeq data
 #################################################
-import sys, os.path
+import sys, os, os.path
 from optparse import OptionParser, OptionGroup
 from StepsLibrary import *
 from StepsLibrary_EXP import *
@@ -655,7 +655,7 @@ group.add_option("-D", "--dynamic", dest="dynamic", action = "store_true", defau
 group.add_option("-d", "--thresh", dest="dynthresh", default=0.75, type="float",
                  help="""in conjunction with -D, otherwise this is ignored. This allows to specify how much of the alignment to keep using the per-base coverage. The [%default] value indicates that ends of the alignment are trimmed until a base has a coverage of [%default] * peak coverage.""", metavar="#") 
 
-group.add_option("-a", "--annotations", dest="dir_anno", default="/usr/local/devel/ANNOTATION/sszpakow/ANNOTATION/",
+group.add_option("-a", "--annotations", dest="dir_anno", default=os.environ["YAP_DATA"]+"/",
                  help="directory that stores auxilliary files\n[%default]", metavar="annotations")
 group.add_option("-S", "--SAMPLE", dest="sampletimes", default=0, type="int",
                  help="perform sub.sampling of all reads based on the number of reads in smallest group. if 0 - all reads are used. if 1 - the sampling will be performed once, if 2 or more, then 2 or more independent samplings are going to be performed.\n[%default]", metavar="#")                 

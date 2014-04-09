@@ -7,7 +7,7 @@
 #################################################
 ##    The next steps...
 #################################################
-import sys
+import sys, os
 from optparse import OptionParser, OptionGroup
 from StepsLibrary import *
 from StepsLibrary_EXP import *
@@ -200,7 +200,7 @@ group = OptionGroup(parser, "Optional Configuration", description="parameters to
 
 group.add_option("-Y", "--Yap", dest="mode", default="16S",
                  help="""Which Pipeline: 16S ITS [%default]""", metavar="#") 
-group.add_option("-a", "--annotations", dest="dir_anno", default="/usr/local/devel/ANNOTATION/sszpakow/ANNOTATION/",
+group.add_option("-a", "--annotations", dest="dir_anno", default=os.environ["YAP_DATA"]+"/",
                  help="directory that stores auxilliary files\n[%default]", metavar="annotations")
 
 parser.add_option_group(group)

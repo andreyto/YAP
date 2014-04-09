@@ -3,7 +3,10 @@
 this_dir=$(cd $(dirname $0) && pwd)
 
 ## Environment variables that YAP code needs to be defined on submit host
-export YAP_DEPS=/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin
+export YAP_DEPS="/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin"
+## This will be used if --annotations argument is not passed
+export YAP_DATA="/usr/local/devel/ANNOTATION/sszpakow/ANNOTATION/"
+## You probably only ever change this if you are a developer
 export YAP_SCRIPTS="$this_dir"
 
 export PATH=$YAP_DEPS:/usr/local/packages/graphviz/bin:$PATH
