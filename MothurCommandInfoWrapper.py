@@ -246,7 +246,6 @@ def test(path = "./"):
 ##      Begin
 ##
 
-#test("/usr/local/devel/ANNOTATION/sszpakow/YAP/bin/mothur-v1.29.2/")
 #################################################
 ##      Finish
 #################################################

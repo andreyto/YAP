@@ -1067,9 +1067,11 @@ class   MascotReportLifter(DefaultStep):
         try:
             file = self.getInputValue("file")
             id = self.getInputValue("id")
-            script =  "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/ANNOTATION/MascotAutomaton.js"
+            script =  os.environ["YAP_MASCOT_AUTOMATION_JS"] #"/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/ANNOTATION/MascotAutomaton.js"
             self.message("caching and reporting on %s in file %s" % (id, file))
-            k = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/phantomjs %s %s %s" % (script, file, id)
+            #"/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/phantomjs
+            k = "%s %s %s %s" (os.environ["YAP_MASCOT_AUTOMATION_PHANTOM_JS"],\
+                    script, file, id)
             self.message(k)
 
             #task = GridTask(template="default", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
