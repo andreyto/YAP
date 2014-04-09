@@ -273,23 +273,30 @@ def preprocess():
         }
         P0 = FileSplit(ARGS, [x]) 
             
-        #### trim fastQ files
-        ARGS = {
-         "-h": options.minqual,
-        }
-        P1 = SQAtrim(ARGS, [P0])
-        
         #### overlap mates if available
         if len(files)==2:
+            
+            #### trim fastQ files
+            ARGS = {
+             "-h": options.minqual_merge,
+            }
+            P1 = SQAtrim(ARGS, [P0])
+        
             ARGS = {
              "-M": "200",
              "-p": Q,
              "-r": "250"
             }
-            P2 = Flash({}, ARGS, [P1])
+            P2_0 = Flash({}, ARGS, [P1])
         else:    
-            P2 = P1
+            P2_0 = P0
                
+        #### final trim of fastQ files
+        ARGS = {
+         "-h": options.minqual,
+        }
+        P2 = SQAtrim(ARGS, [P2_0])
+        
         #### convert fastq to fasta
         ARGS = { 
                 "-Q": Q
@@ -658,8 +665,11 @@ group.add_option("-m", "--minlen", dest="minlength", default=200, type="int",
 group.add_option("-g", "--mingroupsize", dest="mingroupmembers", default=100, type="int",
                  help="after demultiplexing, discard groups with fewer reads than #\n[%default]", metavar="#")
 
+group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", default=3, type="int",
+                 help="Keep stretches of reads this good or better before merging paired reads#\n[%default]", metavar="#")
+
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
-                 help="Keep stretches of reads this good or better #\n[%default]", metavar="#")
+                 help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
 
 group.add_option("-q", "--quick", dest="quickmode", action = "store_true", default=False,
                  help="""If specified, only single, reference DB based chimera checking will be used. [%default]""", metavar="#") 
@@ -680,7 +690,7 @@ group = OptionGroup(parser, "Technical", description="could be useful sometimes"
 group.add_option("-C", "--NODESIZE", dest="nodesize", default=30,
                  help="maximum number of grid node's CPUs to use\n[%default]", metavar="#")
 parser.add_option_group(group)
-    
+
 (options, args) = parser.parse_args()
 
 #################################################
