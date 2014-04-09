@@ -91,8 +91,8 @@ class   FastaParser:
         else:
             raise StopIteration 
                                 
-        def addSequence(self, x):
-            self.currentFastaSequence = "%s%s" % (self.currentFastaSequence, x.strip())         
+    def addSequence(self, x):
+        self.currentFastaSequence = "%s%s" % (self.currentFastaSequence, x.strip())         
                         
     
     def __str__():
