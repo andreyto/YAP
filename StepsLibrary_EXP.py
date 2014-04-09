@@ -1453,7 +1453,7 @@ def getQ(file):
 #################################################
 
 one_at_a_time = BoundedSemaphore(value=2, verbose=False)
-sqapath = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/solexaQA-current/"
+sqapath = os.path.join(os.environ["YAP_DEPS"],"solexaQA-current/")
 
 
 #################################################

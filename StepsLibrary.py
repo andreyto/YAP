@@ -128,7 +128,7 @@ class   BufferedOutputHandler(ReportingThread):
         skipDot = True #dot was getting into endless loop
         if not skipDot:
             for format in ["svg", "svgz", "png", "pdf"]:
-                command = "%sdot -T%s -o workflow.%s" % (dotpath, format, format) 
+                command = "dot -T%s -o workflow.%s" % (format, format) 
                 p = Popen(shlex.split(command), stdin = PIPE, stdout = PIPE, stderr = PIPE, close_fds=True)
                 out, err = p.communicate(dot)
                 
@@ -2223,11 +2223,13 @@ transtab = maketrans(inttab, outtab)
 
 pool_open_files = BoundedSemaphore(value=400, verbose=False)
 
-mothurpath  = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/mothur-current/"
-cdhitpath   = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/cdhit-current/"
-scriptspath = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/scripts/"
-binpath     = "/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin/"
-dotpath     = "/usr/local/packages/graphviz/bin/"
+binpath = os.environ["YAP_DEPS"]+"/"
+scriptspath = os.environ["YAP_SCRIPTS"]+"/"
+
+mothurpath  = os.path.join(binpath,"mothur-current/")
+cdhitpath   = os.path.join(binpath,"cdhit-current/")
+
+print binpath, scriptspath, mothurpath
 
 defaulttemplate = "default.q"
 
