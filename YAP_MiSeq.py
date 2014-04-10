@@ -687,7 +687,7 @@ group.add_option("-x", "--strict", dest="strictlevel", default=2, type="int",
 parser.add_option_group(group)
 
 group = OptionGroup(parser, "Technical", description="could be useful sometimes")
-group.add_option("-C", "--NODESIZE", dest="nodesize", default=30,
+group.add_option("-C", "--NODESIZE", dest="nodesize", default=16,
                  help="maximum number of grid node's CPUs to use\n[%default]", metavar="#")
 parser.add_option_group(group)
 

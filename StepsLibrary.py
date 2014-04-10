@@ -552,8 +552,8 @@ class GridTask():
         ### debug flag
         self.debugflag = debug
              
-        ### the only queue that has more than 4 CPUs...
-        if int(cpu)>4:
+        ### the only queue that has 24 CPUs or more
+        if int(cpu)>16:
             self.queue = "himem.q"
                 
         if len(dependson)>0:
