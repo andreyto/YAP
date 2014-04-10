@@ -569,7 +569,12 @@ class GridTask():
             self.retainstreams=""
         
             
-        ### to avoid long command problems, create a script with the command, and invoke that instead of the command directyly. 
+        ### To source the proper envirnoment, create a script with the command, 
+        ### and first source the RC file, then invoke that instead of submitting
+        ### the command directly. Note that the -V option to qsub does not
+        ### propagate LD_LIBRARY_PATH, which is squashed by the kernel for sudo
+        ### programs (which is SGE exec daemon). Note (AT): -V just does not work
+        ### for me at all - jobs silently fail (2014-04-10).
         px = "tmp.%s.%s.%s.%s." % (randrange(1,100),randrange(1,100),randrange(1,100),randrange(1,100))
         sx = ".%s.%s.%s.%s.sh" % (randrange(1,100),randrange(1,100),randrange(1,100),randrange(1,100))
         
@@ -584,7 +589,7 @@ class GridTask():
                 os.close(scriptfile)
             self.scriptfilepath = scriptfilepath
             os.chmod(self.scriptfilepath,  0777 )
-            input= "%s\n" % (self.inputcommand)
+            input= "#!/bin/bash\n. {}\n{}\n".format(rcfilepath,self.inputcommand)
             with open(self.scriptfilepath, "w") as scriptfile:
                 scriptfile.write(input)
         finally:
@@ -606,7 +611,6 @@ class GridTask():
             self.queue = QS.pickQ()
         self.command = self.templates[self.queue]
         
-        #print self.command
         err = ""
         for i_try in range(3):
             time.sleep(2**(i_try+1)-2)
@@ -2223,13 +2227,20 @@ transtab = maketrans(inttab, outtab)
 
 pool_open_files = BoundedSemaphore(value=400, verbose=False)
 
+rcfilepath = os.environ["YAP_RC"]
+
 binpath = os.environ["YAP_DEPS"]+"/"
 scriptspath = os.environ["YAP_SCRIPTS"]+"/"
 
 mothurpath  = os.path.join(binpath,"mothur-current/")
 cdhitpath   = os.path.join(binpath,"cdhit-current/")
 
-print binpath, scriptspath, mothurpath
+print """\
+        rcfilepath = {}\
+        binpath = {}\
+        scriptspath = {}\
+        mothurpath = {}
+        """.format(rcfilepath,binpath,scriptspath,mothurpath)
 
 defaulttemplate = "default.q"
 
@@ -2237,3 +2248,4 @@ defaulttemplate = "default.q"
 #################################################
 ##      Finish
 #################################################
+

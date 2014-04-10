@@ -1,0 +1,47 @@
+#!/bin/bash
+
+## Environment file to be sourced (not runned!!!) by both the entry scripts 
+## on the submit host and job scripts when executing on the compute nodes
+
+## This uses BASH v.3 specific variables to determine its own location
+
+#################################################################
+## You probably only ever will change this if you are a developer
+#################################################################
+
+## name of the file that is "sourced" (only BASH v.3!!!)
+this_script=${BASH_SOURCE[0]}
+
+this_script_base=$(basename "$this_script")
+
+## abs path to this dir
+this_script_dir=$(cd $(dirname "$this_script") && pwd)
+
+export YAP_RC="$this_script_dir/$this_script_base"
+
+export YAP_SCRIPTS="$this_script_dir"
+
+export YAP_WRAPPER="$YAP_SCRIPTS/YAP_wrapper"
+
+#################################################################
+## These you might want to change if you moved the dependencies
+#################################################################
+
+## Environment variables that YAP code needs to be defined
+export YAP_DEPS="/usr/local/projects/GATES/jshankar/YAPCOPY/sszpakow/YAP/bin"
+
+## This will be used if --annotations argument is not passed to entry script
+export YAP_DATA="/usr/local/devel/ANNOTATION/sszpakow/ANNOTATION/"
+
+export PATH=$YAP_DEPS:/usr/local/packages/graphviz/bin:$PATH
+
+# make sure all the libraries are linked
+export LD_LIBRARY_PATH=/usr/local/packages/mysql/lib:/usr/local/packages/gcc/lib64:/usr/local/packages/curl/lib:$LD_LIBRARY_PATH
+
+#################################################################
+#################################################################
+
+## Soemwhat mitigate the problem that YAP needs lots of file 
+## descriptors on large runs:
+ulimit -n hard
+

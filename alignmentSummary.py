@@ -7,7 +7,7 @@
 #################################################
 ##  Summarize an alignment
 #################################################
-import sys, shlex, glob, time
+import sys, shlex, glob, time, os
 from optparse import OptionParser
 from string import maketrans
 from subprocess import *
@@ -106,7 +106,8 @@ class   FastaParser:
 ##
 def qsub(num):
     batches.append(num)
-    command = "qsub -P %s -N tmp.%s.in -cwd -M %s -m a \"%spython %s -i tmp.%s.in -o tmp.%s.out -s -p REFSEQ \"" % (options.projectid, num,options.mailaddress,options.binpath, sys.argv[0], num, num   )
+    ## we use YAP_wrapper to correctly source the environment
+    command = "qsub -P %s -b y -N tmp.%s.in -cwd -M %s -m a \"%s %spython %s -i tmp.%s.in -o tmp.%s.out -s -p REFSEQ \"" % (options.projectid, num,options.mailaddress,os.environ["YAP_WRAPPER"],options.binpath, sys.argv[0], num, num   )
     
     #command = "qsub -P %s -N tmp.%s.in -cwd -l \"fast\" -M sszpakow@jcvi.org -m a \"/home/sszpakow/bin/python %s -i tmp.%s.in -o tmp.%s.out -s -p REFSEQ \"" % (options.projectid, num, sys.argv[0], num, num   )
     #      qsub -P 810013 -N tmp.2.in -cwd -l "fast" -M sszpakow@jcvi.org -m a "/home/sszpakow/bin/python /home/sszpakow/scripts/summarizeAlignment.py -i tmp.2.in -o tmp.2.out -s -p REFSEQ "
