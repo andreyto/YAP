@@ -93,12 +93,12 @@ class   TCOFFEE(DefaultStep):
                     if f.find(k)>-1:
                         command = "%s %s %s " % (template, f, argstring)
                         self.message(command)
-                        task = GridTask(template="pick", name=self.stepname, command=command, cpu=4,  dependson=list(), cwd = self.stepdir, debug=False)
+                        task = GridTask(template="pick", name=self.stepname, command=command, cpu=4,  dependson=list(), cwd = self.stepdir)
                         task.wait()
             else:
                 command = "%s %s %s " % (template, f, argstring)
                 self.message(command)
-                task = GridTask(template="pick", name=self.stepname, command=command, cpu=4,  dependson=list(), cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name=self.stepname, command=command, cpu=4,  dependson=list(), cwd = self.stepdir)
                 task.wait() 
 
 class   CLUSTALW2(DefaultStep):
@@ -129,12 +129,12 @@ class   CLUSTALW2(DefaultStep):
                     if f.find(k)>-1:
                         command = "%s -INFILE=%s" % (template, f)
                         self.message(command)
-                        task = GridTask(template="pick", name=self.stepname, command=command, cpu=1,  dependson=list(), cwd = self.stepdir, debug=False)
+                        task = GridTask(template="pick", name=self.stepname, command=command, cpu=1,  dependson=list(), cwd = self.stepdir)
                         tasks.append(task)
             else:
                 command = "%s -INFILE=%s" % (template, f)
                 self.message(command)
-                task = GridTask(template="pick", name=self.stepname, command=command, cpu=1,  dependson=list(), cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name=self.stepname, command=command, cpu=1,  dependson=list(), cwd = self.stepdir)
                 tasks.append(task)
                 
         for task in tasks:
@@ -174,7 +174,7 @@ class   Bowtie1 (DefaultStep):
             if "%s.mate2" % (name) in m2:
                 k = "bowtie %s -1 %s.mate1 -2 %s.mate2 > %s.bowtie1alignment" % (argstring, name, name, name)
                 #self.message(k)
-                task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)    
+                task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir)    
                 tasks.append(task)
             else:
                 self.message("skipping: %s" % (name))
@@ -183,7 +183,7 @@ class   Bowtie1 (DefaultStep):
             name = ".".join(f.strip().split(".")[:-1])
             k = "bowtie %s  %s > %s.bowtie1alignment" % (argstring, f, name)
             #self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)    
+            task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir)    
             tasks.append(task)
                                 
         for task in tasks:
@@ -261,7 +261,7 @@ class   Bowtie2 (DefaultStep):
                     self.message(k)
                 elif counter==2:
                     self.message("processing %s file(s)..." % (jobs))
-                task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir)
                 tasks.append(task)
             else:
                 self.message("skipping: %s" % (name))
@@ -276,7 +276,7 @@ class   Bowtie2 (DefaultStep):
                 self.message(k)
             elif counter==2:
                 self.message("processing %s file(s)..." % (jobs))
-            task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir, debug=False)    
+            task = GridTask(template="pick", name=self.stepname, command=k, cpu=cpus, dependson=list(), cwd = self.stepdir)    
             tasks.append(task)
                                 
         for task in tasks:
@@ -374,7 +374,7 @@ class   ContaminantRemoval(DefaultStep):
                 if len(m1)==1:
                     self.message(k)
             
-                task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir)
                 tasks.append(task)
             else:
                 missing +=1 
@@ -412,12 +412,12 @@ class   SingletonsFishOut(DefaultStep):
                     if f.find("contigs")==-1:               
                         k = "%spython %sMateFilter.py -i %s -k %s -t fasta -s singletons " % (binpath, scriptspath, f, singletons )
                         self.message(k)
-                        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir, debug=False)
+                        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir)
                         task.wait()
                         
                         k = "%spython %sMateFilter.py -i %s -k %s -t fasta -s assembled " % (binpath, scriptspath, f, assembled )
                         self.message(k)
-                        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir, debug=False)   
+                        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir)   
                         task.wait()
 
                         
@@ -736,7 +736,7 @@ class   ContigCoverageUpdate(DefaultStep):
                     if ".".join(f.split(".")[1:-3]) in t:
                         k = "%spython %sContigCoverageUpdate.py %s  %s" % (binpath, scriptspath, t, f)
                         self.message(k)
-                        task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+                        task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
                         tasks.append(task)
         for t in tasks:
             t.wait()
@@ -910,7 +910,7 @@ class   SQA(DefaultStep):
         for f in files:
             k = "perl %sSolexaQA.pl %s %s" % (sqapath, f, argstring)
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
         for task in tasks:
@@ -950,7 +950,7 @@ class   SQAtrim(DefaultStep):
                 self.message(k)
             elif counter==2:
                 self.message("processing %s files..." % (jobs)) 
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
         for task in tasks:
@@ -1013,14 +1013,14 @@ class   SQAlenfil(DefaultStep):
                 #k = "perl %sLengthSort.pl %s %s %s" % (sqapath, f1, f2s[0], argstring)
                 
                 self.message(k)
-                task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
                 tasks.append(task)
             
         for f in singlefiles:
             newf = "%s.len.fastq" % (".".join(f.strip().split(".")[:-1]))
             k = "perl %sLengthSort.pl %s %s; mv %s.single %s" % (sqapath, f, argstring, f, newd)
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
         for task in tasks:
@@ -1042,7 +1042,7 @@ class   GuessFastQEncoding(DefaultStep):
         x = self.find("mate1")
         k = "%spython %sFastQEncoding.py %s > %s.offset" % (binpath, scriptspath, x[0], x[0])
         self.message(k)
-        task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+        task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
         task.wait()
         
         otpt = ""
@@ -1346,7 +1346,7 @@ class   Flash (DefaultStep):
                     self.message(k)
                 elif counter==2:
                     self.message("processing %s file(s)..." % (jobs))
-                task = GridTask(template="pick", name=self.stepname, command=k, cpu=1, dependson=list(), cwd = self.stepdir, debug=False)   
+                task = GridTask(template="pick", name=self.stepname, command=k, cpu=1, dependson=list(), cwd = self.stepdir)   
                 tasks.append(task)
             else:
                 self.message("skipping: %s" % (name))
@@ -1436,7 +1436,7 @@ class   OtuTable(DefaultStep):
         group = self.find("group")[0]   
         k = "%spython %sOTUtableMaker.py -l %s -g %s " % (binpath, scriptspath, list, group )
         self.message(k)
-        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir, debug=False)
+        task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir)
         task.wait()
                         
 #################################################

@@ -8,6 +8,8 @@
 ## A library of "steps" or program wrappers to construct pipelines
 ## Pipeline steps orchestration, grid management and output handling.
 #################################################
+
+import YAPGlobals
 import sys, tempfile, shlex, glob, os, stat, hashlib, time, datetime, re, curses
 from threading import *
 from subprocess import *
@@ -535,7 +537,11 @@ class   TaskQueueStatus(ReportingThread):
     ### templates adapted to JCVIs grid
     ### 
 class GridTask():
-    def __init__(self, template="default.q", command = "", name="default", cpu="1", dependson=list(), cwd=".", debug=False):
+    def __init__(self, template="default.q", command = "", name="default", 
+            cpu="1", dependson=list(), cwd=".", debug=None, mem_per_cpu=2):
+
+        if debug is None:
+            debug = YAPGlobals.debug_grid_tasks
         
         self.gridjobid=-1
         self.completed=False
@@ -552,10 +558,33 @@ class GridTask():
         ### debug flag
         self.debugflag = debug
              
-        ### the only queue that has 24 CPUs or more
-        if int(cpu)>16:
+        ncpu = 1
+        try:
+            ncpu = int(cpu)
+        except:
+            pass
+        
+        ### the only queue that has 4 CPUs allowed in pe
+        if ncpu>4:
             self.queue = "himem.q"
                 
+        mem = mem_per_cpu * ncpu
+
+        if mem > 120:
+            mem = 120
+
+        if mem > 32:
+            self.queue = "himem.q"
+
+        mem_per_cpu = int(mem/ncpu)
+
+        ## -l memory interacts with -pe threaded, resulting in a multiple of them
+        ## for the total memory requested
+        if mem_per_cpu != 0: 
+            mem_spec = "-l memory={}G".format(mem_per_cpu)
+        else:
+            mem_spec = ""
+        
         if len(dependson)>0:
             holdfor = "-hold_jid "
             for k in dependson:
@@ -595,13 +624,15 @@ class GridTask():
         finally:
             pool_open_files.release()
             ####
+
+
         self.templates=dict()
-        self.templates["himem.q"]     = 'qsub %s -P %s -N jh.%s -cwd -pe threaded %s -l "himem" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, cpu, self.email, holdfor, self.scriptfilepath) 
-        self.templates["default.q"]  = 'qsub %s -P %s -N jd.%s -cwd -pe threaded %s -M %s -m a %s "%s" ' % (self.retainstreams, self.project, name, cpu,  self.email, holdfor,  self.scriptfilepath)
-        self.templates["fast.q"]       = 'qsub %s -P %s -N jf.%s -cwd -pe threaded %s -l "fast" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name,cpu,  self.email, holdfor, self.scriptfilepath) 
-        self.templates["medium.q"]   = 'qsub %s -P %s -N jm.%s -cwd -pe threaded %s -l "medium" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, cpu,  self.email, holdfor, self.scriptfilepath)
-        self.templates["himemCHEAT"] = 'qsub %s -P %s -N jH.%s -cwd -pe threaded %s -l "himem" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, 1, self.email, holdfor, self.scriptfilepath)    
-        self.templates["mpi"]        = 'qsub %s -P %s -N jP.%s -cwd -pe orte %s -M %s -m a  %s mpirun -np %s "%s" ' % (self.retainstreams, self.project, name, cpu, cpu, self.email, holdfor, self.scriptfilepath )
+        self.templates["himem.q"]     = 'qsub %s -P %s -N jh.%s -cwd -pe threaded %s %s -l "himem" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, cpu, mem_spec, self.email, holdfor, self.scriptfilepath) 
+        self.templates["default.q"]  = 'qsub %s -P %s -N jd.%s -cwd -pe threaded %s %s -M %s -m a %s "%s" ' % (self.retainstreams, self.project, name, cpu, mem_spec, self.email, holdfor,  self.scriptfilepath)
+        self.templates["fast.q"]       = 'qsub %s -P %s -N jf.%s -cwd -pe threaded %s %s -l "fast" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name,cpu, mem_spec, self.email, holdfor, self.scriptfilepath) 
+        self.templates["medium.q"]   = 'qsub %s -P %s -N jm.%s -cwd -pe threaded %s %s -l "medium" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, cpu, mem_spec, self.email, holdfor, self.scriptfilepath)
+        self.templates["himemCHEAT"] = 'qsub %s -P %s -N jH.%s -cwd -pe threaded %s %s -l "himem" -M %s -m a  %s "%s" ' % (self.retainstreams, self.project, name, 1, mem_spec, self.email, holdfor, self.scriptfilepath)    
+        self.templates["mpi"]        = 'qsub %s -P %s -N jP.%s -cwd -pe orte %s %s -M %s -m a  %s mpirun -np %s "%s" ' % (self.retainstreams, self.project, name, cpu, mem_spec, self.email, holdfor, cpu, self.scriptfilepath )
         self.command = ""
         QS.register(self);
                         
@@ -610,6 +641,8 @@ class GridTask():
         if not self.queue in self.templates.keys():
             self.queue = QS.pickQ()
         self.command = self.templates[self.queue]
+        BOH.toPrint("-----","BATCH","command: '{}'".format(self.command))
+        
         
         err = ""
         for i_try in range(3):
@@ -1644,7 +1677,7 @@ class   CleanFasta(DefaultStep):
         f = f[0]
         k = "%spython %s/CleanFasta.py -i %s -o %s.dash_stripped.fasta" % (binpath, scriptspath,f, ".".join(f.split(".")[:-1]))
         self.message(k) 
-        task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir, debug=False)
+        task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
         task.wait()         
         
 class   MakeNamesFile(DefaultStep):
@@ -1891,7 +1924,7 @@ class   CDHIT_454(DefaultStep):
         for f in fs:
             k ="%scd-hit-454 -i %s -o %s.cdhit %s" % (cdhitpath, f, f, args)
             self.message(k)
-            task = GridTask(template=defaulttemplate, name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir, debug=False)
+            task = GridTask(template=defaulttemplate, name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir)
 #           if self.nodeCPUs>2:
 #               task = GridTask(template=defaulttemplate, name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir, debug=True)
 #           else:
@@ -1929,7 +1962,7 @@ class   CDHIT_EST(DefaultStep):
         k ="%scd-hit-est -i  %s -o %s._%s_.cdhit %s" % (cdhitpath, f, f, dist, args)
         
         self.message(k)
-        task = GridTask(template="pick", name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir, debug=False)
+        task = GridTask(template="pick", name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir)
 #       if self.nodeCPUs>2:
 #           task = GridTask(template="defaulttemplate", name=self.stepname, command=k, cpu=self.nodeCPUs,  dependson=list(), cwd = self.stepdir, debug=True)
 #       else:
@@ -1952,17 +1985,17 @@ class   CDHIT_Perls(DefaultStep):
         for cluster in x:
             k = "%sclstr2tree.pl %s > %s.tre" % (cdhitpath, cluster, cluster)
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
             k = "%sclstr_size_histogram.pl %s > %s.hist.tab.txt " % (cdhitpath, cluster, cluster)
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
             k = "%sclstr_size_stat.pl %s  > %s.size.tab.txt" % (cdhitpath, cluster, cluster)
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir)
             tasks.append(task)
             
             
@@ -2002,7 +2035,7 @@ class   CDHIT_Mothurize(DefaultStep):
         if len(clst)>0:
             k = "%spython %sCDHIT_mothurize_clstr.py -c %s  %s %s" % (binpath, scriptspath, clst[0], nameswitch, modeswitch)    
             self.message(k)
-            task = GridTask(template="pick", name=self.stepname, command=k, dependson=list(), cwd = self.stepdir, debug=False)
+            task = GridTask(template="pick", name=self.stepname, command=k, dependson=list(), cwd = self.stepdir)
             task.wait() 
             
         else:
@@ -2063,7 +2096,7 @@ class   R_OTUplots(DefaultStep):
         for file in f:
             if file.find("annotated.fasta")>0:
                 k = """grep ">" %s | awk '{FS = "|"; OFS="\t"} {print $4, $5}' > %s.otustats""" % (file, file)
-                task = GridTask(template="pick", name=self.stepname, command=k, dependson=list(), cwd = self.stepdir, debug=False)
+                task = GridTask(template="pick", name=self.stepname, command=k, dependson=list(), cwd = self.stepdir)
                 tasks.append(task)
                 #script.write("""makeBatch("%s.otustats")\n""" % (file))
                 

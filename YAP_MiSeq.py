@@ -9,6 +9,7 @@
 ##    OTUs (certain regions of 16S and ITS supported)
 ##    This is for demultiplexed MiSeq data
 #################################################
+import YAPGlobals
 import sys, os, os.path
 from optparse import OptionParser, OptionGroup
 from StepsLibrary import *
@@ -689,9 +690,13 @@ parser.add_option_group(group)
 group = OptionGroup(parser, "Technical", description="could be useful sometimes")
 group.add_option("-C", "--NODESIZE", dest="nodesize", default=16,
                  help="maximum number of grid node's CPUs to use\n[%default]", metavar="#")
+group.add_option("-G", "--debug-grid-tasks", dest="debug_grid_tasks", action = "store_true", default=False,
+                 help="Debug GridTasks by default\n[%default]", metavar="#")
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
+
+YAPGlobals.debug_grid_tasks = options.debug_grid_tasks
 
 #################################################
 ##        Begin
