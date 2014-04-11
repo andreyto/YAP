@@ -82,8 +82,8 @@ class   FastaLikeParser:
         else:
             raise StopIteration 
                                 
-        def addSequence(self, x):
-            self.currentFastaSequence = "%s\n%s" % (self.currentFastaSequence, x.strip())           
+    def addSequence(self, x):
+        self.currentFastaSequence = "%s\n%s" % (self.currentFastaSequence, x.strip())           
                         
     def __str__():
         return ("reading file: %s" %self.filename)      
@@ -132,8 +132,8 @@ class   FastaParser:
         else:
             raise StopIteration 
                                 
-        def addSequence(self, x):
-            self.currentFastaSequence = "%s%s%s" % (self.currentFastaSequence,self.linesep, x.strip())          
+    def addSequence(self, x):
+        self.currentFastaSequence = "%s%s%s" % (self.currentFastaSequence,self.linesep, x.strip())          
                         
     
     def __str__():
