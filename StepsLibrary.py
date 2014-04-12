@@ -572,8 +572,9 @@ class GridTask():
                 
         mem = mem_per_cpu * ncpu
 
-        if mem > 60:
-            mem = 60
+        ## this is the max currently allowed - go figure...
+        if mem > 40:
+            mem = 40
 
         if mem > 32:
             self.queue = "himem.q"
