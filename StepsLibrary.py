@@ -389,7 +389,9 @@ class   TaskQueueStatus(ReportingThread):
                 del self.processing[key]
                 
     def isJobDone(self, jid):
-        
+        if jid == -1:
+            BOH.toPrint("-----","BATCH","Impossible job id for qstat {}, marking as done...".format(jid))
+            return True
         err = ""
         for i_try in range(3):
             time.sleep(2**(i_try+1)-2)
@@ -570,8 +572,8 @@ class GridTask():
                 
         mem = mem_per_cpu * ncpu
 
-        if mem > 120:
-            mem = 120
+        if mem > 60:
+            mem = 60
 
         if mem > 32:
             self.queue = "himem.q"
