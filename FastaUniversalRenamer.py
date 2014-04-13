@@ -78,6 +78,7 @@ class FastaParser:
 _arguments = argparse.ArgumentParser(description='replace the entire line of fasta header with a unique, hash', epilog='if all else fails: shpakoo@gmail.com')
 _arguments.add_argument('--fasta', metavar='N', type=str, dest = "fn_fasta")
 _arguments.add_argument('--prefix', metavar='N', type=str, dest = "prefix", default="")
+_arguments.add_argument('--id-gen', metavar='N', type=str, dest = "id_gen", default="uuid32", choices = ("uuid32","sha256","md5"))
 args = _arguments.parse_args()
 
 
@@ -91,8 +92,21 @@ newfileMAPPING = "{0}.idhash.mapping".format( ".".join(args.fn_fasta.strip().spl
 otptseq = open(newfileFASTA, "w")
 otptmap = open(newfileMAPPING, "w")
 
+if args.id_gen == "sha256":
+    id_gen = lambda h: hashlib.sha256(head).hexdigest()
+elif args.id_gen == "md5":
+    id_gen = lambda h: hashlib.md5(head).hexdigest()
+elif args.id_gen == "uuid32":
+    import uuid
+    id_gen = lambda h: uuid.uuid4().hex
+else:
+    raise ValueError(args.id_gen)
+
+
+
 for head, seq in FastaParser(args.fn_fasta):
-    newhead =  hashlib.sha256(head).hexdigest()
+    ## sha256 hex is 64 byte; md5 is 32 byte
+    newhead =  id_gen(head)
     otptseq.write(">{2}{0}\n{1}\n".format(newhead,seq, args.prefix) )
     otptmap.write("{2}{0}\t{1}\n".format(newhead, head, args.prefix) )          
     
