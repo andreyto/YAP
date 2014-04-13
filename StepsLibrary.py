@@ -808,7 +808,7 @@ class   DefaultStep(DefaultStepBase):
     #in other words, the number of threads on which start() has been 
     #called. The code creating instances of derived classes will block
     #until the semaphore is acquired.
-    semaphore = BoundedSemaphore(500)
+    semaphore = BoundedSemaphore(YAPGlobals.step_threads_max)
     def __init__(self):
         #### thread init
         DefaultStepBase.__init__(self)
@@ -2339,7 +2339,7 @@ inttab=  "ACGTN"
 outtab = "TGCAN"
 transtab = maketrans(inttab, outtab)
 
-pool_open_files = BoundedSemaphore(value=400, verbose=False)
+pool_open_files = BoundedSemaphore(value=YAPGlobals.open_files_max, verbose=False)
 
 rcfilepath = os.environ["YAP_RC"]
 

@@ -17,3 +17,9 @@ find_require = False
 ## are done debugging.
 step_dummy_thread = False
 
+## maximum number of concurrent Step threads (through semaphore count)
+step_threads_max = 100 #500
+
+## maximum number of concurrently opened files (through semaphore count)
+open_files_max = 200 #400
+
