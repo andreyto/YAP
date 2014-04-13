@@ -483,7 +483,8 @@ def cleanup(input):
         
     ### merge all accnos files and remove ALL chimeras    
     allchimeras = FileMerger("accnos", toremove)
-    s17 = MothurStep("remove.seqs",options.nodesize, dict(), dict(), allchimeras)
+    args ={"force_exclude": "fastq"}
+    s17 = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
     
     #### if primer trimming points are not unknown
     if _trimstart!=_trimend:
@@ -564,6 +565,7 @@ def CDHITCluster(input):
     return (SORTED)
 
 def plotsAndStats(input):
+    import re
     
     ### all groups!
     args = {"mingroupmembers": 0, 
@@ -571,9 +573,12 @@ def plotsAndStats(input):
     s23 = GroupRetriever(args, [input])
     
     ######## make a shared file 
-    args = {"label" : "0.01-0.03-0.05-0.1", "find": "groups"}
-    s24 = MothurStep("make.shared", options.nodesize, dict(), args, [s23])
-
+    labels = ["0.01","0.03","0.05","0.1"]
+    args = {"label" : "-".join(labels), "find": "groups"}
+    s24_1 = MothurStep("make.shared", options.nodesize, dict(), args, [s23])
+    s24 = FileMerger("shared", [s24_1],
+            cut_header_lines_others=1,
+            order=[re.escape(lab) for lab in labels]) 
 
     args = {
             "label" : "0.01-0.03-0.05-0.1",
