@@ -12,6 +12,9 @@
 import YAPGlobals
 import sys, tempfile, shlex, glob, os, stat, hashlib, time, datetime, re, curses
 from threading import *
+##threading redefines enumerate() with no arguments. as a kludge, we drop it here
+del globals()['enumerate']
+import dummy_threading
 from subprocess import *
 from MothurCommandInfoWrapper import *
 from collections import defaultdict
@@ -28,7 +31,7 @@ from email.Utils import COMMASPACE, formatdate
 from email import Encoders
 
 import traceback
-
+import pdb
 
 _author="Sebastian Szpakowski"
 _date="2012/09/20"
@@ -42,6 +45,21 @@ _version="Version 2"
 class   ReportingThread(Thread):
     def __init__(self):
         Thread.__init__(self)
+
+    def run(self):
+        #attempting to catch threads dying
+        #stack trace should be printed anyway
+        #for non-daemon threads, so this will
+        #probably give us no benefit, just trying
+        try:
+            self.do_run()
+        except:
+            traceback.print_exc()
+            raise
+
+class   ReportingDummyThread(dummy_threading.Thread):
+    def __init__(self):
+        dummy_threading.Thread.__init__(self)
 
     def run(self):
         #attempting to catch threads dying
@@ -110,7 +128,7 @@ class   BufferedOutputHandler(ReportingThread):
         
         time.sleep(5)
         
-        while activeCount()>3 or self.registered>0 or len(self.cache) > 0:
+        while YAPGlobals.step_dummy_thread or (activeCount()>3 or self.registered>0 or len(self.cache) > 0):
             self.flush()
             time.sleep(1)
         
@@ -291,6 +309,11 @@ class   BufferedOutputHandler(ReportingThread):
             
 class   TaskQueueStatus(ReportingThread):
     def __init__(self, update=1, maxnodes=10):
+        if YAPGlobals.step_dummy_thread:
+            self.quiet = True
+        else:
+            self.quiet = False
+
         ReportingThread.__init__(self)
         self.active=True
         
@@ -327,16 +350,15 @@ class   TaskQueueStatus(ReportingThread):
     def do_run(self):
         BOH.toPrint("-----","BATCH","Setting up the grid...")
         time.sleep(5)
-        while activeCount()>3 or self.running>0 or self.scheduled.qsize()>0:
+        while YAPGlobals.step_dummy_thread or (activeCount()>3 or self.running>0 or self.scheduled.qsize()>0):
 
             self.pollfinished()
             self.pollqueues()
             self.pollrunning()
             self.dispatch()
             self.cleanup()
-            
-            BOH.toPrint("-----","BATCH","{}".format(self))
-            #print self
+            if not self.quiet:
+                BOH.toPrint("-----","BATCH","{}".format(self))
             
             time.sleep(self.update)
         
@@ -399,9 +421,11 @@ class   TaskQueueStatus(ReportingThread):
                 return True
             elif p.returncode == 0:
                 break
-            BOH.toPrint("-----","BATCH","qstat error {}, trying again...".format(err))
+            if not self.quiet:
+                BOH.toPrint("-----","BATCH","qstat error {}, trying again...".format(err))
         else:
-            BOH.toPrint("-----","BATCH","isJobDone() multiple qstat errors {}, giving up.".format(err))
+            if not self.quiet:
+                BOH.toPrint("-----","BATCH","isJobDone() multiple qstat errors {}, giving up.".format(err))
         return False
            
     def pollqueues(self):
@@ -418,9 +442,11 @@ class   TaskQueueStatus(ReportingThread):
             if p.returncode == 0:
                 qstat_ok = True
                 break
-            BOH.toPrint("-----","BATCH","qstat error {}, trying again...".format(err))
+            if not self.quiet:
+                BOH.toPrint("-----","BATCH","qstat error {}, trying again...".format(err))
         else:
-            BOH.toPrint("-----","BATCH","pollqueues() multiple qstat errors {}, giving up.".format(err))
+            if not self.quiet:
+                BOH.toPrint("-----","BATCH","pollqueues() multiple qstat errors {}, giving up.".format(err))
         
         if qstat_ok:
             #else we just keep the previous attribute values
@@ -768,7 +794,13 @@ class GeneralPurposeParser:
     #################################################
     ### The mother of all Steps:
     ###
-class   DefaultStep(ReportingThread):
+
+if YAPGlobals.step_dummy_thread:
+    DefaultStepBase = ReportingDummyThread
+else:
+    DefaultStepBase = ReportingThread
+
+class   DefaultStep(DefaultStepBase):
     #This limits the number of concurrent ("submitted") step instances,
     #in other words, the number of threads on which start() has been 
     #called. The code creating instances of derived classes will block
@@ -776,7 +808,7 @@ class   DefaultStep(ReportingThread):
     semaphore = BoundedSemaphore(500)
     def __init__(self):
         #### thread init
-        ReportingThread.__init__(self)
+        DefaultStepBase.__init__(self)
         self.random = uniform(0, 10000)
         self.name = ("%s[%s]" % (self.name, self.random))
 
@@ -839,7 +871,7 @@ class   DefaultStep(ReportingThread):
     def start(self):
         DefaultStep.semaphore.acquire()
         try:
-            ReportingThread.start(self)
+            DefaultStepBase.start(self)
         except:
             DefaultStep.semaphore.release()
             raise
@@ -1084,8 +1116,11 @@ class   DefaultStep(ReportingThread):
 
                 self.outputs[self.determineType(newfilename)].add(newfilename)
                         
-    def find(self, arg, ln=True, original=False):
-        files=list()    
+    def find(self, arg, ln=True, original=False, require=None):
+        if require is None:
+            require = YAPGlobals.find_require
+        files=list()   
+        self.message("find inputs: {}".format(self.inputs))
         if not original:        
             if len(self.inputs[arg])==0:
                 tmp = {arg: self.getOutputs(arg)}
@@ -1094,7 +1129,11 @@ class   DefaultStep(ReportingThread):
             tmp = {arg: self.getOriginal(arg)}      
             self.setInputs(tmp) 
 
+        self.message("find inputs: {}".format(self.inputs))
         files = self.inputs[arg]
+        if require and not len(files):
+            self.message("No files found that match {} and 'require' is set. Raising and exception.".format(arg))
+            raise ValueError(arg)
         
         toreturn=list() 
         
@@ -1330,6 +1369,11 @@ class   MothurStep(DefaultStep):
             TYPES = FORCE.strip().split(",")
         else:
             TYPES = x.getInputs()
+        
+        FORCE_EXCL = self.getInputValue("force_exclude")
+        if FORCE_EXCL != None:
+            TYPES_EXCL = FORCE_EXCL.strip().split(",")
+            TYPES = [ t for t in TYPES if t not in TYPES_EXCL ]
             
         mothurargs = list()
         
@@ -1578,9 +1622,27 @@ class   MatchGroupsToList(DefaultStep):
         self.message(k) 
         task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
         task.wait()         
-            
+
+def sort_strings_by_regex_list(sl,rl):
+    """Example:
+    sl = ["aaa.0.1.shared","aaa.0.01.shared","aaa.0.03.shared"]
+    rl = [r"0.01",r"0.03",r"0.1"]
+    print sort_strings_by_regex_list(sl,[re.escape(r) for r in rl])
+    >>> ["aaa.0.01.shared","aaa.0.03.shared","aaa.0.1.shared"]
+    """
+    import re
+    
+    def rx_key(rl,s):
+        for (r_ind,r) in enumerate(rl):
+            if re.search(r,s):
+                return r_ind
+        return len(rl)
+    
+    return sorted(sl,key = lambda s: rx_key(rl,s))
+
 class   FileMerger(DefaultStep):
-    def __init__(self, TYPES, PREV, prefix="files"):
+    def __init__(self, TYPES, PREV, prefix="files", cut_header_lines_others=0, order=None):
+        """@param order is a list of regex patterns; currently ignored when > 25 files w/o header cutting"""
         ARGS =  {"types": TYPES}        
         DefaultStep.__init__(self)
         #self.setInputs(INS)
@@ -1589,23 +1651,42 @@ class   FileMerger(DefaultStep):
         self.setName("FILE_cat")
         #self.nodeCPUs=nodeCPUs
         self.prefix = prefix
+        self.cut_header_lines_others = cut_header_lines_others
+        self.order = order
         self.start()
         
     def performStep(self):
         tasks = list()
-        
+        pdb.set_trace()        
         for t in self.getInputValue("types").strip().split(","):
             files = self.find(t)
-            if len(files)>0 and len(files)<25:
-                k = "cat %s > %s.x%s.merged.%s" % (" ".join(files), self.prefix, len(files), t)
-                self.message(k) 
-                task = GridTask(template="pick", name="cat", command=k, cpu=1,  cwd = self.stepdir)
-                tasks.append(task)
-            elif len(files)>=25:
-                k = "cat *.%s* > %s.x%s.merged.%s" % (t, self.prefix, len(files), t)
-                self.message(k) 
-                task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
-                tasks.append(task)
+            self.message("FileMerger: files found {}".format(files))
+            if self.order is not None:
+                files = sort_strings_by_regex_list(files,self.order)
+            self.message("FileMerger: files after ordering {}".format(files))
+
+            if self.cut_header_lines_others == 0:
+                if len(files)>0 and len(files)<25:
+                    k = "cat %s > %s.x%s.merged.%s" % (" ".join(files), self.prefix, len(files), t)
+                    self.message(k) 
+                    task = GridTask(template="pick", name="cat", command=k, cpu=1,  cwd = self.stepdir)
+                    tasks.append(task)
+                elif len(files)>=25:
+                    k = "cat *.%s* > %s.x%s.merged.%s" % (t, self.prefix, len(files), t)
+                    self.message(k) 
+                    task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
+                    tasks.append(task)
+            else:
+                if len(files) > 0:
+                    fn_out = "%s.x%s.merged.%s" % (self.prefix, len(files), t)
+                    k = "cat %s > %s\n" % (files[0], fn_out)
+                    ## we want to maintain order of concatenation regarless of the number of files,
+                    ## hence the loop instead of the glob
+                    for fn_inp in files[1:]:
+                        k += "tail -q -n +{} {} >> {}\n".format(self.cut_header_lines_others+1,fn_np,fn_out)
+                    self.message(k) 
+                    task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
+                    tasks.append(task)
             #else:
             #   self.failed=True
             

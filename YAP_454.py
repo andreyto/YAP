@@ -488,7 +488,8 @@ def cleanup(input):
         
     ### merge all accnos files and remove ALL chimeras    
     allchimeras = FileMerger("accnos", toremove)
-    s17 = MothurStep("remove.seqs",options.nodesize, dict(), dict(), allchimeras)
+    args ={"force_exclude": "fastq"}
+    s17 = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
     
     #### if primer trimming points are not unknown
     if _trimstart!=_trimend:
