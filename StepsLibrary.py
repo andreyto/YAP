@@ -1120,7 +1120,6 @@ class   DefaultStep(DefaultStepBase):
         if require is None:
             require = YAPGlobals.find_require
         files=list()   
-        self.message("find inputs: {}".format(self.inputs))
         if not original:        
             if len(self.inputs[arg])==0:
                 tmp = {arg: self.getOutputs(arg)}
@@ -1129,7 +1128,6 @@ class   DefaultStep(DefaultStepBase):
             tmp = {arg: self.getOriginal(arg)}      
             self.setInputs(tmp) 
 
-        self.message("find inputs: {}".format(self.inputs))
         files = self.inputs[arg]
         if require and not len(files):
             self.message("No files found that match {} and 'require' is set. Raising and exception.".format(arg))
@@ -1657,13 +1655,12 @@ class   FileMerger(DefaultStep):
         
     def performStep(self):
         tasks = list()
-        pdb.set_trace()        
         for t in self.getInputValue("types").strip().split(","):
             files = self.find(t)
-            self.message("FileMerger: files found {}".format(files))
+            #self.message("FileMerger: files found {}".format(files))
             if self.order is not None:
                 files = sort_strings_by_regex_list(files,self.order)
-            self.message("FileMerger: files after ordering {}".format(files))
+            #self.message("FileMerger: files after ordering {}".format(files))
 
             if self.cut_header_lines_others == 0:
                 if len(files)>0 and len(files)<25:
@@ -1683,7 +1680,7 @@ class   FileMerger(DefaultStep):
                     ## we want to maintain order of concatenation regarless of the number of files,
                     ## hence the loop instead of the glob
                     for fn_inp in files[1:]:
-                        k += "tail -q -n +{} {} >> {}\n".format(self.cut_header_lines_others+1,fn_np,fn_out)
+                        k += "tail -q -n +{} {} >> {}\n".format(self.cut_header_lines_others+1,fn_inp,fn_out)
                     self.message(k) 
                     task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
                     tasks.append(task)
