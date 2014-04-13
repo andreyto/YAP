@@ -1200,21 +1200,21 @@ class   DefaultStep(DefaultStepBase):
             pool_open_files.release()
         for line in lines:
             line = line.strip("\n").split("\t")
-        if line[0] == "output":
-            type = line[1]
-            files = line[2].split(",")
-            for file in files:
-                self.outputs[type].add(file)
-        elif line[0] == "input":
-            type = line[1] 
-            files = line[2].split(",")
-            for file in files:
-                self.inputs[type].add(file) 
-        elif line[0] == "argument":
-            if len(line)==2:
-                self.arguments[line[1]] = " "
-            else:
-                self.arguments[line[1]]=line[2]
+            if line[0] == "output":
+                type = line[1]
+                files = line[2].split(",")
+                for file in files:
+                    self.outputs[type].add(file)
+            elif line[0] == "input":
+                type = line[1] 
+                files = line[2].split(",")
+                for file in files:
+                    self.inputs[type].add(file) 
+            elif line[0] == "argument":
+                if len(line)==2:
+                    self.arguments[line[1]] = " "
+                else:
+                    self.arguments[line[1]]=line[2]
         return True
                 
     def message(self, text):
