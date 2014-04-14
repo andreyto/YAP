@@ -178,7 +178,7 @@ class   BufferedOutputHandler(ReportingThread):
             
         while len(self.cache) > 0:
             id, name, line, date = self.cache.popleft()
-            tag = "[{2}] [{0}] {1:<20} > ".format( id[:5], name, time.asctime(date) ) 
+            tag = "[{2}] [{0}] {1:<20} > ".format( id, name, time.asctime(date) ) 
             line = "{0!s}".format(line)
             line = self.collapseIDs(line)
             
@@ -915,7 +915,9 @@ class   DefaultStep(DefaultStepBase):
         for k in self.previous:
             while not k.isDone():
                 #self.message( "waiting" )
-                time.sleep(1)
+                ##even small sleep should be OK - because
+                ##of GIL, total CPU spent spinning will not be higher than one full core
+                time.sleep(0.1)
             if k.hasFailed():
                 self.failed=True
             redo=redo or (not k.isDonePreviously()) 
@@ -945,7 +947,7 @@ class   DefaultStep(DefaultStepBase):
         if self.previous!=None:
             for k in self.previous:
                 while k.getWorkPathId()==-1:
-                    time.wait(1)
+                    time.wait(0.1)
                 tmp.extend([k.getWorkPathId()])
             
         for k,v in self.inputs.items():
@@ -957,7 +959,8 @@ class   DefaultStep(DefaultStepBase):
         tmp.sort()  
         tmp = "\n".join(tmp)
         
-        workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
+        #workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
+        workpathid = hashlib.md5(tmp).hexdigest()
         return (workpathid)
                 
     def getWorkPathId(self):    
@@ -1642,48 +1645,55 @@ def sort_strings_by_regex_list(sl,rl):
     return sorted(sl,key = lambda s: rx_key(rl,s))
 
 class   FileMerger(DefaultStep):
-    def __init__(self, TYPES, PREV, prefix="files", cut_header_lines_others=0, order=None):
+    def __init__(self, TYPES, PREV, prefix="files", cut_header_lines_others=0, order=""):
         """@param order is a list of regex patterns; currently ignored when > 25 files w/o header cutting"""
-        ARGS =  {"types": TYPES}        
+        ARGS =  dict(types=TYPES,
+                prefix=prefix, 
+                cut_header_lines_others=cut_header_lines_others, 
+                order=order) 
         DefaultStep.__init__(self)
         #self.setInputs(INS)
         self.setArguments(ARGS)
         self.setPrevious(PREV)
         self.setName("FILE_cat")
         #self.nodeCPUs=nodeCPUs
-        self.prefix = prefix
-        self.cut_header_lines_others = cut_header_lines_others
-        self.order = order
         self.start()
         
     def performStep(self):
+        
+        prefix=self.getInputValue("prefix") 
+        cut_header_lines_others=self.getInputValue("cut_header_lines_others") 
+        order=self.getInputValue("order")
+        if order == "":
+            order = None
+
         tasks = list()
         for t in self.getInputValue("types").strip().split(","):
             files = self.find(t)
             #self.message("FileMerger: files found {}".format(files))
-            if self.order is not None:
-                files = sort_strings_by_regex_list(files,self.order)
+            if order is not None:
+                files = sort_strings_by_regex_list(files,order)
             #self.message("FileMerger: files after ordering {}".format(files))
 
-            if self.cut_header_lines_others == 0:
+            if cut_header_lines_others == 0:
                 if len(files)>0 and len(files)<25:
-                    k = "cat %s > %s.x%s.merged.%s" % (" ".join(files), self.prefix, len(files), t)
+                    k = "cat %s > %s.x%s.merged.%s" % (" ".join(files), prefix, len(files), t)
                     self.message(k) 
                     task = GridTask(template="pick", name="cat", command=k, cpu=1,  cwd = self.stepdir)
                     tasks.append(task)
                 elif len(files)>=25:
-                    k = "cat *.%s* > %s.x%s.merged.%s" % (t, self.prefix, len(files), t)
+                    k = "cat *.%s* > %s.x%s.merged.%s" % (t, prefix, len(files), t)
                     self.message(k) 
                     task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
                     tasks.append(task)
             else:
                 if len(files) > 0:
-                    fn_out = "%s.x%s.merged.%s" % (self.prefix, len(files), t)
+                    fn_out = "%s.x%s.merged.%s" % (prefix, len(files), t)
                     k = "cat %s > %s\n" % (files[0], fn_out)
                     ## we want to maintain order of concatenation regarless of the number of files,
                     ## hence the loop instead of the glob
                     for fn_inp in files[1:]:
-                        k += "tail -q -n +{} {} >> {}\n".format(self.cut_header_lines_others+1,fn_inp,fn_out)
+                        k += "tail -q -n +{} {} >> {}\n".format(cut_header_lines_others+1,fn_inp,fn_out)
                     self.message(k) 
                     task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
                     tasks.append(task)
@@ -1692,7 +1702,7 @@ class   FileMerger(DefaultStep):
             
         for task in tasks:
             task.wait()
-            time.sleep(1)
+            time.sleep(0.1)
             
 class   FileSort(DefaultStep):
     def __init__(self, TYPES, PREV):
