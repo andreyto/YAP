@@ -505,6 +505,7 @@ def cleanup(input):
     ####### remove sequence fragments, bad alignments (?) 
     args = {}
     if options.dynamic:
+        ##dynamic means alignments were trimmed by now, and bad became short?
         args = { "minlength" : "50" ,
                  "force": "fasta,name,group"}
     else:
