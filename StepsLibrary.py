@@ -162,6 +162,13 @@ class   BufferedOutputHandler(ReportingThread):
         self.mailLog()
         
     def register(self, id):
+        
+        if(id in set(self.ids)):
+            msg = "CRITICAL: Attempt to register duplicate Step ID: {}".format(id)
+            self.toPrint("-----", "GLOBAL", msg)
+            #this is called in the main thread
+            raise ValueError(msg)
+
         self.registered+=1
         self.ids.append(id)
     
