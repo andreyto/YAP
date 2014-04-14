@@ -576,8 +576,12 @@ def plotsAndStats(input):
     s23 = GroupRetriever(args, [input])
     
     ######## make a shared file 
-    args = {"label" : "0.01-0.03-0.05-0.1", "find": "groups"}
-    s24 = MothurStep("make.shared", options.nodesize, dict(), args, [s23])
+    labels = ["0.01","0.03","0.05","0.1"]
+    args = {"label" : "-".join(labels), "find": "groups"}
+    s24_1 = MothurStep("make.shared", options.nodesize, dict(), args, [s23])
+    s24 = FileMerger("shared", [s24_1],
+            cut_header_lines_others=1,
+            order=[re.escape(lab) for lab in labels]) 
 
 
     args = {
