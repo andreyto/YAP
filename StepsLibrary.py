@@ -162,6 +162,13 @@ class   BufferedOutputHandler(ReportingThread):
         self.mailLog()
         
     def register(self, id):
+
+        if(id in set(self.ids)):
+            msg = "CRITICAL: Attempt to register duplicate Step ID: {}".format(id)
+            self.toPrint("-----", "GLOBAL", msg)
+            #this is called in the main thread
+            raise ValueError(msg)
+
         self.registered+=1
         self.ids.append(id)
     
@@ -178,7 +185,7 @@ class   BufferedOutputHandler(ReportingThread):
             
         while len(self.cache) > 0:
             id, name, line, date = self.cache.popleft()
-            tag = "[{2}] [{0}] {1:<20} > ".format( id[:5], name, time.asctime(date) ) 
+            tag = "[{2}] [{0}] {1:<20} > ".format( id, name, time.asctime(date) ) 
             line = "{0!s}".format(line)
             line = self.collapseIDs(line)
             
@@ -958,6 +965,7 @@ class   DefaultStep(DefaultStepBase):
         tmp = "\n".join(tmp)
         
         workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
+        #workpathid = hashlib.md5(tmp).hexdigest()
         return (workpathid)
                 
     def getWorkPathId(self):    
