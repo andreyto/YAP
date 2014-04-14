@@ -964,8 +964,8 @@ class   DefaultStep(DefaultStepBase):
         tmp.sort()  
         tmp = "\n".join(tmp)
         
-        workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
-        #workpathid = hashlib.md5(tmp).hexdigest()
+        #workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
+        workpathid = hashlib.md5(tmp).hexdigest()
         return (workpathid)
                 
     def getWorkPathId(self):    
