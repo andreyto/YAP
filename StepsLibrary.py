@@ -180,7 +180,7 @@ class   BufferedOutputHandler(ReportingThread):
             id, name, line, date = self.cache.popleft()
             tag = "[{2}] [{0}] {1:<20} > ".format( id, name, time.asctime(date) ) 
             line = "{0!s}".format(line)
-            line = self.collapseIDs(line)
+            #line = self.collapseIDs(line)
             
             
             otpt = "{0}{1}".format(tag, line[:self.wrap])
