@@ -28,10 +28,10 @@ export YAP_WRAPPER="$YAP_SCRIPTS/YAP_wrapper"
 #################################################################
 
 ## Environment variables that YAP code needs to be defined
-export YAP_DEPS="/home/atovtchi/work/YAP.deps/bin"
+export YAP_DEPS="/usr/local/devel/BCIS/ICS/16S/YAP/bin/"
 
 ## This will be used if --annotations argument is not passed to entry script
-export YAP_DATA="/usr/local/devel/ANNOTATION/sszpakow/ANNOTATION/"
+export YAP_DATA="/usr/local/devel/BCIS/ICS/16S/YAP/ANNOTATION/"
 
 export PATH=$YAP_DEPS:/usr/local/packages/graphviz/bin:$PATH
 
