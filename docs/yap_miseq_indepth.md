@@ -100,9 +100,9 @@ Several columns are required. The header names are fixed in both wording and cas
 
 ### The required columns and brief description of what they do.
 
-path |  file1  | file2| forward | reverse |	**SampleID** |	GroupingA |	GroupingB |
------|---------|------|---------|-------- | -------------|----------- |-----------|
-REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	optional | optional |
+path |  file1  | file2| forward | reverse |	**SampleID** |	GroupingA |	GroupingB 
+-----|---------|------|---------|-------- | -------------|----------- |-----------
+REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	optional | optional 
 
 
 Where:
@@ -121,12 +121,12 @@ Where:
 
 An example input *.csv file should look like this:
 
-path |  file1  | file2| forward | reverse |    **SampleID** |	Experimentname  |Samplegroup|
----| ----------|------------| -------------------|---------------- | -----------|---------- |
-...|  A_R1.fastq|A_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse766|A	| Control	|	 
-...|  B_R1.fastq|B_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse767|B	| Control	| 
-...|  C_R1.fastq|C_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse768|A	| Treatment	|	
-...|  D_R1.fastq|D_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse769|B	| Treatment	|	
+path |  file1  | file2| forward | reverse |SampleID     |Experimentname|Samplegroup
+---  |---------|------|---------|-------- | ------------|--------------|-----------
+... |A_R1.fastq|A_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse766|A	| Control		 
+... |B_R1.fastq|B_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse767|B	| Control	 
+... |C_R1.fastq|C_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse768|A	| Treatment		
+... |D_R1.fastq|D_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse769|B	| Treatment		
 
 _Note_: ... indicates the absolute path.
 
