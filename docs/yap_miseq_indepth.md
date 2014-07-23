@@ -101,6 +101,7 @@ Several columns are required. The header names are fixed in both wording and cas
 ### The required columns and brief description of what they do.
 
 path |  file1  | file2| forward | reverse |	**SampleID** |	GroupingA |	GroupingB |
+-----|---------|------|---------|-------- | -------------|----------- |-----------|
 REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	REQUIRED |	optional | optional |
 
 
@@ -120,13 +121,14 @@ Where:
 
 An example input *.csv file should look like this:
 
-path |  file1  | file2| forward | reverse |    **SampleID** |	Experimentname | Samplegroup |
-...	A_R1.fastq |	A_R2.fastq	|AGAGTTTGATYMTGGCTCAG |	ATTACCGCGGCTGCTGG |	Mouse766	|A	Control	|	 
-...	B_R1.fastq	| B_R2.fastq	|AGAGTTTGATYMTGGCTCAG|	ATTACCGCGGCTGCTGG	|Mouse767	|B	Control	| 
-...	C_R1.fastq	|C_R2.fastq	|AGAGTTTGATYMTGGCTCAG|	ATTACCGCGGCTGCTGG|	Mouse768|	A	Treatment	|	
-...    D_R1.fastq	|D_R2.fastq	|AGAGTTTGATYMTGGCTCAG|	ATTACCGCGGCTGCTGG|	Mouse769|	B	Treatment	|	
+path |  file1  | file2| forward | reverse |    **SampleID** |	Experimentname  |Samplegroup|
+---| ----------|------------| -------------------|---------------- | -----------|---------- |
+...|  A_R1.fastq|A_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse766|A	| Control	|	 
+...|  B_R1.fastq|B_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse767|B	| Control	| 
+...|  C_R1.fastq|C_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse768|A	| Treatment	|	
+...|  D_R1.fastq|D_R2.fastq	|AGAGTTTGATYMTGGCTCAG|ATTACCGCGGCTGCTGG|Mouse769|B	| Treatment	|	
 
-_Note_: Path was skipped for brevity reasons.
+_Note_: ... indicates the absolute path.
 
 This example file represents a sequencing effort of four mouse samples (four different entries in the SampleID column). Specifying forward primer and reverse primer sequences will essentially search and trim the data twice, once requiring the forward primer, second requiring the reverse primer. In the end the clean results will be merged.
 
