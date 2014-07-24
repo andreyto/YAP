@@ -26,5 +26,5 @@ YAP is currently tailored around the JCVI computational resources. In most cases
 Yap runs in two modes:
 
 1. The 454 mode requires original SFF files, prior to demultiplexing.
-2. The MiSeq mode requires the demultiplexed illumina FASTQ files.
+2. The [MiSeq mode](docs/yap_miseq_indepth.md) requires the demultiplexed illumina FASTQ files.
 
