@@ -28,18 +28,20 @@ In the YAP MiSeq mode, YAP processes demultiplexed Illumina FASTQ files amplifie
 ### <a id="introduction" href="#introduction">Introduction</a>
 There is no single analytic workflow that will produce a paper and publication-ready graphs. Please bear in mind that that the YAP workflow is intended as a starting point in the exploration of your data.
 
-### <a id="using-and-citing-yap" href="#using-and-citing-yap">Using and citing YAP ####</a>
+### <a id="using-and-citing-yap" href="#using-and-citing-yap">Using and citing YAP</a>
 If you use YAP, don't forget to cite [this source](https://github.com/shpakoo/YAP) as well the authors of all the independent modules within the workflow. Please see [YAP: Methods and References](#yap-methods-and-reference) for a complete description and a list of references.
 
 ### <a id="overview" href="#overview">Overview</a>
 
 The YAP_MiSeq.sh script wraps around the following utilities and resources:
 
+*   SolexaQA
+*   FLASH
 *   [Mothur v.1.29.2](http://www.mothur.org/ "Mothur Website")
 *   [CD-HIT v.4.6.1](http://weizhong-lab.ucsd.edu/cd-hit/ "CD-HIT")
-*   [LUCY](http://lucy.sourceforge.net/ "LUCY software")
 *   [A variety of R packages](http://cran.r-project.org/ "R Statistical Language Website")
 *   [Python](http://python.org/ "Python Programming Language Website") scripts by Drs. Szpakowski and Tovchigrechko. to facilitate a smooth integration and visualization of the output.
+
 
 *   The following are installed as a part of the YAP package
         *   The R Statistical Language  
@@ -308,6 +310,5 @@ External resources
 
 * [mothur - www.mothur.org](http://www.mothur.org/)
 * [CD-HIT Official Website - weizhong-lab.ucsd.edu](http://weizhong-lab.ucsd.edu/cd-hit/)
-* [Lucy DNA sequence quality and vector trimming tool - lucy.sourceforge.net](http://lucy.sourceforge.net/)
 * [The Comprehensive R Archive Network - cran.r-project.org](http://cran.r-project.org/)
 * [Comma-separated values - Wikipedia, the free encyclopedia - en.wikipedia.org](http://en.wikipedia.org/wiki/Comma-separated_values)
