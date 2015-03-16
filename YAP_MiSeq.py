@@ -167,7 +167,7 @@ class InfoParserMiSeq:
         self.reverse = ""
         
         for line in self.info:
-            path = line[0]
+            path = os.path.abspath(line[0])
             file1 = line[1]
             file2 = line[2]
             forward = line[3]
@@ -276,17 +276,20 @@ def preprocess():
             
         #### overlap mates if available
         if len(files)==2:
-            
-            #### trim fastQ files
-            ARGS = {
-             "-h": options.minqual_merge,
-            }
-            P1 = SQAtrim(ARGS, [P0])
+            if options.minqual_merge > 0: 
+                #### trim fastQ files
+                ARGS = {
+                 "-h": options.minqual_merge,
+                }
+                P1 = SQAtrim(ARGS, [P0])
+            else:
+                P1 = P0
         
             ARGS = {
              "-M": "200",
              "-p": Q,
              "-r": "250"
+             #"-x":"0.15"
             }
             P2_0 = Flash({}, ARGS, [P1])
         else:    
@@ -673,7 +676,7 @@ group.add_option("-g", "--mingroupsize", dest="mingroupmembers", default=100, ty
                  help="after demultiplexing, discard groups with fewer reads than #\n[%default]", metavar="#")
 
 group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", default=3, type="int",
-                 help="Keep stretches of reads this good or better before merging paired reads#\n[%default]", metavar="#")
+                 help="Keep stretches of reads this good or better before merging paired reads (zero means no trimming)#\n[%default]", metavar="#")
 
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
                  help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
@@ -726,10 +729,10 @@ if options.mode=="16S":
     ### which fasta ID use as the reference (if file has more than one)
     _referenceseqname = "e_coli2_genbank"
     ### mothur's compendium of ALIGNED 16S sequences
-    _alignment = "silva.bacteria.fasta"
+    _alignment = "silva.seed_v119.align"
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
-    _trainset = "trainset9_032012.pds.fasta"
-    _taxonomy = "trainset9_032012.pds.tax"
+    _trainset = "trainset10_082014.pds.fasta"
+    _taxonomy = "trainset10_082014.pds.tax"
     ### until automatic primer detection is implemented, these are coordinates of primers
     ### when aligned to the silva.bacteria.fasta (for in-silico PCR and subsequent primer trimming)
     #_trimstart = "1044"

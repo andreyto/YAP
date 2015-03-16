@@ -1353,7 +1353,7 @@ class   Flash (DefaultStep):
                                 
         for task in tasks:
             task.wait()
-    
+
 class   PrimerClipper(DefaultStep):
     def __init__(self, INS, ARGS, PREV):        
         DefaultStep.__init__(self)

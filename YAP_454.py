@@ -725,10 +725,10 @@ if options.mode=="16S":
     ### which fasta ID use as the reference (if file has more than one)
     _referenceseqname = "e_coli2_genbank"
     ### mothur's compendium of ALIGNED 16S sequences
-    _alignment = "silva.bacteria.fasta"
+    _alignment = "silva.seed_v119.align"
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
-    _trainset = "trainset9_032012.pds.fasta"
-    _taxonomy = "trainset9_032012.pds.tax"
+    _trainset = "trainset10_082014.pds.fasta"
+    _taxonomy = "trainset10_082014.pds.tax"
     ### until automatic primer detection is implemented, these are coordinates of primers
     ### when aligned to the silva.bacteria.fasta (for in-silico PCR and subsequent primer trimming)
     #_trimstart = "1044"
