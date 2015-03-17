@@ -473,7 +473,7 @@ def cleanup(input):
     for ch in [ "uchime" ]:
         ### chimeras against reference
         args = {"force" : "fasta,reference"}
-        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment)] }
+        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
         
         A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
         toremove.append(A)
@@ -726,6 +726,8 @@ if options.mode=="16S":
     _referenceseqname = "e_coli2_genbank"
     ### mothur's compendium of ALIGNED 16S sequences
     _alignment = "silva.seed_v119.align"
+    ### mothur's compendium of ALIGNED 16S sequences for chimera detection
+    _alignment_chimera = "silva.gold.align"
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
     _trainset = "trainset10_082014.pds.fasta"
     _taxonomy = "trainset10_082014.pds.tax"
@@ -739,6 +741,7 @@ elif options.mode=="ITS":
     _referenceseq = "yeastITS.fasta"
     _referenceseqname = "AF293_reference"
     _alignment = "FungalITSseed.092012.1.aln.fasta"
+    _alignment_chimera = _alignment
     _trainset = "FungalITSdb.092012.1.fasta"
     _taxonomy = "FungalITSdb.092012.1.tax"
     #_trimstart = "1716"

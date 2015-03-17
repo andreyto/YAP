@@ -867,14 +867,25 @@ class   DefaultStep(DefaultStepBase):
                 v=" "
             self.arguments[k] = v
     def setPrevious(self, x):
-        if not type(x) is list:
+        if isinstance(x,DefaultStep):
             self.previous.append(x)
         else:
             for elem in x:
+                
+                if not isinstance(elem,DefaultStep):
+                    msg = "List of PREVIOUS steps in step {} must contain Steps objects, instead found this element: {}".\
+                            format(self.getName(),elem)
+                    self.message(msg)
+                    raise ValueError(msg)
+
                 self.previous.append(elem)
+    
     def setName(self, x):
         self.stepname=x
 
+    def getName(self):
+        return self.stepname
+    
     #override the start method to make sure that we do not
     #generate any exceptions in our code between acquiring semaphore
     #and calling Thread.start()
@@ -1044,7 +1055,11 @@ class   DefaultStep(DefaultStepBase):
         filename = filename.strip().split(".")
         extension = filename[-1]
         preextension = filename[-2]
-        if preextension == "scrap":
+        
+        if "scrap" in filename and extension == "fasta": #scrap.contigs.fasta comes from make.contigs
+            return "scrapfasta"
+        
+        elif "scrap" in filename: #scrap.contigs.fasta comes from make.contigs
             return "scrap"
             
         elif preextension == "align" and extension == "report":
@@ -1143,7 +1158,7 @@ class   DefaultStep(DefaultStepBase):
 
         files = self.inputs[arg]
         if require and not len(files):
-            self.message("No files found that match {} and 'require' is set. Raising and exception.".format(arg))
+            self.message("No files found that match {} and 'require' is set. Raising an exception.".format(arg))
             raise ValueError(arg)
         
         toreturn=list() 
@@ -1377,7 +1392,7 @@ class   MothurStep(DefaultStep):
         x = MOTHUR.getCommandInfo(self.stepname)
         #self.message(self.inputs)
         if FORCE != None :
-            TYPES = FORCE.strip().split(",")
+            TYPES = [ t.strip() for t in FORCE.strip().split(",") if t.strip() != "" ]
         else:
             TYPES = x.getInputs()
         
@@ -1407,20 +1422,32 @@ class   MothurStep(DefaultStep):
                     self.message("Optional argument '%s' not found, skipping" % (TYPE)) 
         
         for arg, val in self.arguments.items():
+
+            if arg not in ("force","force_exclude"):
         
-            if x.isAnArgument(arg):
-                mothurargs.append("%s=%s" % (arg, val))
-            elif arg=="find":
-                for a in val.strip().split(","):
-                    self.message(a)
-                    valstoinsert = self.find(a)
-                    self.message(valstoinsert)
-                    if len(valstoinsert)>0:
-                        mothurargs.append("%s=%s" % (a, "-".join(valstoinsert)))
-                    else:
-                        self.message("skipping '%s' - not found" % (a))
-            else:
-                self.message("skipping '%s', as it is not an argument for %s" % (arg, self.stepname))
+                if x.isAnArgument(arg):
+                    mothurargs.append("%s=%s" % (arg, val))
+                elif arg in ("find","find_req"):
+                    for a in val.strip().split(","):
+                        self.message(a)
+                        kv = a.strip().split("=",1)
+                        if len(kv) > 1:
+                            k,v = kv
+                        else:
+                            k = kv[0]
+                            v = k
+                        valstoinsert = self.find(v.strip())
+                        self.message(valstoinsert)
+                        if len(valstoinsert)>0:
+                            mothurargs.append("%s=%s" % (k.strip(), "-".join(valstoinsert)))
+                        else:
+                            if arg == "find_req":
+                                self.message("Required argument '{}' not found!".format(v))
+                                raise Exception 
+                            else:
+                                self.message("skipping '%s' - not found" % (v))
+                else:
+                    self.message("skipping '%s', as it is not an argument for %s" % (arg, self.stepname))
     
         ### method is parallelizable,   
         if x.isAnArgument("processors") and "processors" not in self.arguments.keys():

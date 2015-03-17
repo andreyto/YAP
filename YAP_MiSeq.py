@@ -266,15 +266,23 @@ def preprocess():
         qc = SQA(ARGS, [x])
         supplementary.append(qc) 
         
-        ### split into smaller files for parallelization
-        ### 100,000 sequences (x4 since fastq)
-        ARGS = {
-                    "types": "mate1,mate2,fastq",
-                    "chunk":  "400000"
-        }
-        P0 = FileSplit(ARGS, [x]) 
+        ## do not split until I implement building table file for input
+        ## fastq for make.contigs (it does not understand file lists
+        ## for ffastq and rfastq. Maybe this is not ever needed for a typical
+        ## case of demultiplexed fastq where each file is already not too large
+        if not (len(files)==2 and options.mate_merger == "make.contigs"):
+            ### split into smaller files for parallelization
+            ### 100,000 sequences (x4 since fastq)
+            ARGS = {
+                        "types": "mate1,mate2,fastq",
+                        "chunk":  "400000"
+            }
+            P0 = FileSplit(ARGS, [x]) 
+        else:
+            P0 = x
             
         #### overlap mates if available
+        do_final_trim = True
         if len(files)==2:
             if options.minqual_merge > 0: 
                 #### trim fastQ files
@@ -284,28 +292,38 @@ def preprocess():
                 P1 = SQAtrim(ARGS, [P0])
             else:
                 P1 = P0
-        
-            ARGS = {
-             "-M": "200",
-             "-p": Q,
-             "-r": "250"
-             #"-x":"0.15"
-            }
-            P2_0 = Flash({}, ARGS, [P1])
+            if options.mate_merger == "flash":
+                ARGS = {
+                 "-M": "200",
+                 "-p": Q,
+                 "-r": "250"
+                 #"-x":"0.15"
+                }
+                P2_0 = Flash({}, ARGS, [P1])
+            elif options.mate_merger == "make.contigs":
+                args = { "find_req":"ffastq=mate1,rfastq=mate2",
+                         "force": ""}
+                P2_0 = MothurStep("make.contigs", options.nodesize, dict(), args, [P1])
+                ## this is to ignore scrap.contigs.fasta
+                do_final_trim = False
         else:    
             P2_0 = P0
-               
-        #### final trim of fastQ files
-        ARGS = {
-         "-h": options.minqual,
-        }
-        P2 = SQAtrim(ARGS, [P2_0])
         
-        #### convert fastq to fasta
-        ARGS = { 
-                "-Q": Q
-        }
-        P3 = fastq2fasta(dict(), ARGS, [P2])
+        if do_final_trim:
+            #### final trim of fastQ files
+            ARGS = {
+             "-h": options.minqual,
+            }
+            P2 = SQAtrim(ARGS, [P2_0])
+            
+            #### convert fastq to fasta
+            ARGS = { 
+                    "-Q": Q
+            }
+            P3 = fastq2fasta(dict(), ARGS, [P2])
+        else:
+            P3 = P2_0
+
         
         #### use fuzznuc to find cut primer sequences
         ARGS = {
@@ -347,6 +365,8 @@ def finalize(input):
     ####### remove sequences that are too short, and with ambiguous bases 
     args = { "minlength" : "%s" % ( options.minlength ),
              "maxambig" : "0",
+             #"maxlength" : "550",
+             "maxhomop" : "8",
              "force": "fasta,name,group"}
     clean2 = MothurStep("screen.seqs", options.nodesize, dict(), args, [clean])
 
@@ -441,10 +461,13 @@ def finalize(input):
     clusterCD = CDHITCluster(cleanCD)
     
     x = plotsAndStats(clusterCD)
-    INS = {"annotation" : [options.fn_info]}
-    ARGS = {"dist": "0.03"}
-    output1 = R_defaultplots(INS, ARGS, x)
-    output2 = AnnotateClusters(dict(), dict(), output1)
+    if not options.no_statistics:
+        INS = {"annotation" : [options.fn_info]}
+        ARGS = {"dist": "0.03"}
+        output1 = R_defaultplots(INS, ARGS, x)
+        output2 = AnnotateClusters(dict(), dict(), output1)
+    else:
+        output2 = x
         
     return (output2)
 
@@ -470,15 +493,15 @@ def cleanup(input):
     toremove = list()
     for ch in [ "uchime" ]:
         ### chimeras against reference
-        args = {"force" : "fasta,reference"}
-        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment)] }
+        args = {"force" : "fasta,reference", "dereplicate" : "t"}
+        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
         
         A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
         toremove.append(A)
         
         if not options.quickmode:
             ### chimeras against self
-            args ={"force": "name,group,fasta"}
+            args ={"force": "name,group,fasta", "dereplicate" : "t"}
             inputs = {}
             
             A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
@@ -520,7 +543,7 @@ def cleanup(input):
     #s18b_tree = ClearcutTree({}, s18b)
     
     ####### remove empty columns
-    args = {"vertical" : "T"}
+    args = {"vertical" : "T"} #somehow trump=. here removes everything
     s19 = MothurStep("filter.seqs",options.nodesize, dict(), args, [s18b]) 
     
     ####### taxonomy
@@ -678,11 +701,18 @@ group.add_option("-g", "--mingroupsize", dest="mingroupmembers", default=100, ty
 group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", default=3, type="int",
                  help="Keep stretches of reads this good or better before merging paired reads (zero means no trimming)#\n[%default]", metavar="#")
 
+group.add_option("-M", "--mate-merger", dest="mate_merger", default="make.contigs", type="choice",
+                 choices=("make.contigs","flash"),
+                 help="Method for merging paired-end reads into contigs\n[%default]", metavar="mate_merger")
+
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
-                 help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
+                 help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging and only if merging method produces FASTQ - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
 
 group.add_option("-q", "--quick", dest="quickmode", action = "store_true", default=False,
                  help="""If specified, only single, reference DB based chimera checking will be used. [%default]""", metavar="#") 
+
+group.add_option("-s", "--no-statistics", dest="no_statistics", action = "store_true", default=False,
+                 help="""If set, do not do statistical analysis (future default). [%default]""", metavar="#") 
  
 parser.add_option("-H", "--head", dest="head", default=0, type="int",
                  help="For dry runs, import only # of lines from the input files")
@@ -701,11 +731,14 @@ group.add_option("-C", "--NODESIZE", dest="nodesize", default=16,
                  help="maximum number of grid node's CPUs to use\n[%default]", metavar="#")
 group.add_option("-G", "--debug-grid-tasks", dest="debug_grid_tasks", action = "store_true", default=False,
                  help="Debug GridTasks by default\n[%default]", metavar="#")
+group.add_option("-T", "--step-dummy-thread", dest="step_dummy_thread", action = "store_true", default=False,
+                 help="Use dummy threads inside the main thread for StepXXX classes (for interactive debugging)\n[%default]", metavar="#")
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
 
 YAPGlobals.debug_grid_tasks = options.debug_grid_tasks
+YAPGlobals.step_dummy_thread = options.step_dummy_thread
 
 #################################################
 ##        Begin
@@ -730,6 +763,8 @@ if options.mode=="16S":
     _referenceseqname = "e_coli2_genbank"
     ### mothur's compendium of ALIGNED 16S sequences
     _alignment = "silva.seed_v119.align"
+    ### mothur's compendium of ALIGNED 16S sequences for chimera detection
+    _alignment_chimera = "silva.gold.align"
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
     _trainset = "trainset10_082014.pds.fasta"
     _taxonomy = "trainset10_082014.pds.tax"
@@ -743,6 +778,7 @@ elif options.mode=="ITS":
     _referenceseq = "yeastITS.fasta"
     _referenceseqname = "AF293_reference"
     _alignment = "FungalITSseed.092012.1.aln.fasta"
+    _alignment_chimera = _alignment
     _trainset = "FungalITSdb.092012.1.fasta"
     _taxonomy = "FungalITSdb.092012.1.tax"
     #_trimstart = "1716"
@@ -784,13 +820,14 @@ O = list()
 O.append(OutputStep("1-PREPROCESS", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", READY))
 
 if options.sampletimes==0:
-    tmp = finalize(READY)    
-    y = R_rarefactions(dict(), dict(), tmp)
-    z = R_OTUplots(dict(), dict(), tmp)
-    supplementary.append(y)
-    supplementary.append(z)
-    O.append(OutputStep("6-ENTIRE", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", [tmp]))
-    O.append(OutputStep("8-TBC", "phylotax,group,list,fasta", [tmp]))
+    fin = finalize(READY)   
+    if not options.no_statistics:
+        y = R_rarefactions(dict(), dict(), fin)
+        z = R_OTUplots(dict(), dict(), fin)
+        supplementary.append(y)
+        supplementary.append(z)
+    O.append(OutputStep("6-ENTIRE", "taxonomy,shared,groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", fin))
+    O.append(OutputStep("8-TBC", "phylotax,group,list,fasta", fin))
     
 #else:
 #    thefinalset = list()
