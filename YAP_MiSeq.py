@@ -189,13 +189,16 @@ class InfoParserMiSeq:
 
             paths=[]
                        
-            if file1!="":
+            if file1!="" and options.use_mates != "reverse_only":
                 paths.append(path1)
                 self.IDs[path1] = ID
-            if file2!="":
+            if file2!="" and options.use_mates != "forward_only":
                 paths.append(path2)
                 self.IDs[path2] = ID
             
+            if len(paths) == 0:
+                print "You have excluded both forward and reverse reads on line: {}".format(",".join(line))
+                sys.exit(11)
             if options.mate_merger != "none":
                 self.store.append(paths)
             else:
@@ -724,6 +727,10 @@ group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", defa
 group.add_option("-M", "--mate-merger", dest="mate_merger", default="make.contigs", type="choice",
                  choices=("make.contigs","flash","none"),
                  help="Method for merging paired-end reads into contigs\n[%default]", metavar="mate_merger")
+
+group.add_option("--use-mates", dest="use_mates", default="both", type="choice",
+                 choices=("both","forward_only","reverse_only"),
+                 help="Choice to use 'both','forward_only' or 'reverse_only' paired end reads. Combined with --mate-merger option\n[%default]", metavar="use_mates")
 
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
                  help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging and only if merging method produces FASTQ - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
