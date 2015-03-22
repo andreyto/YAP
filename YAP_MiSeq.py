@@ -66,7 +66,10 @@ class InfoValidator:
                     self.error( "Your template has\n\t'{0}' instead of \n\t'SampleID' in the column's header.".format(self.header[7]), 102)
                     
             else:
-                files.add("{0}/{1}".format(line[0], line[1].strip()))   
+                file_added = False
+                if line[1].strip() != "":
+                    files.add("{0}/{1}".format(line[0], line[1].strip()))   
+                    file_added = True
                 if self.tech == "454":
                     barcodes.add(line[2])   
                     primersF.add(line[3])    
@@ -75,9 +78,12 @@ class InfoValidator:
                 elif self.tech == "MiSeq":
                     if line[2].strip() != "":
                         files.add("{0}/{1}".format(line[0], line[2].strip())) 
+                        file_added = True
                     primersF.add(line[3])    
                     primersR.add(line[4])
                     sampleIDs.add(line[5])
+                if not file_added:
+                    self.error( "This line in your template file has no files specified: {}".format(",".join(line)), 103)
                         
             counter+=1 
             
@@ -158,7 +164,7 @@ class InfoValidator:
      
 class InfoParserMiSeq:
     def __init__(self, filename):
-        self.filename = filename
+        self.filename = os.path.abspath(filename)
         self.info = GeneralPurposeParser(filename, sep=",", skip=1)
         self.store = list()
         self.IDs = defaultdict(str)
@@ -167,25 +173,38 @@ class InfoParserMiSeq:
         self.reverse = ""
         
         for line in self.info:
-            path = os.path.abspath(line[0])
-            file1 = line[1]
-            file2 = line[2]
-            forward = line[3]
-            reverse = line[4]
+            path = os.path.abspath(line[0].strip())
+            file1 = line[1].strip()
+            file2 = line[2].strip()
+            forward = line[3].strip()
+            reverse = line[4].strip()
             
             if path.endswith("/"):
                 path = path[:-1]
             
             path1 = "%s/%s" % (path, file1)
             path2 = "%s/%s" % (path, file2)
+
+            ID = line[5].strip()
+
+            paths=[]
                        
-            if file2=="":
-                self.store.append([path1])
-                self.IDs[path1] = line[5]
+            if file1!="":
+                paths.append(path1)
+                self.IDs[path1] = ID
+            if file2!="":
+                paths.append(path2)
+                self.IDs[path2] = ID
+            
+            if options.mate_merger != "none":
+                self.store.append(paths)
             else:
-                self.store.append([path1, path2])
-                self.IDs[path1] = line[5]
-                self.IDs[path2] = line[5]
+                for path_add in paths:
+                    self.store.append([path_add])
+
+            if file1=="" and file2=="":
+                print "Both forward and reverse file fields are empty on line: {}".format(",".join(line))
+                sys.exit(11) 
 
             if reverse =="" or forward =="":
                 print "%s: please provide both primers for file(s):'%s' " % (x, ",".join(file1, file2))
@@ -199,7 +218,8 @@ class InfoParserMiSeq:
                 self.reverse = reverse
 
     def getFiles(self):
-        return (self.store)       
+        return (self.store)      
+
     def getSampleID(self, file):
         return self.IDs[file]
        
@@ -682,7 +702,7 @@ group = OptionGroup(parser, "Optional Configuration", description="parameters to
 group.add_option("-Y", "--Yap", dest="mode", default="16S",
                  help="""Which Pipeline: 16S ITS [%default]""", metavar="#") 
 
-group.add_option("-D", "--dynamic", dest="dynamic", action = "store_true", default=False,
+group.add_option("-D", "--dynamic", dest="dynamic", action = "store_true", default=True,
                  help="""If specified, alignment will be scanned for primer locations and trimmed accordingly. Otherwise a database of known primers and trimming points will be used. [%default]""", metavar="#") 
 
 group.add_option("-d", "--thresh", dest="dynthresh", default=0.75, type="float",
@@ -702,7 +722,7 @@ group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", defa
                  help="Keep stretches of reads this good or better before merging paired reads (zero means no trimming)#\n[%default]", metavar="#")
 
 group.add_option("-M", "--mate-merger", dest="mate_merger", default="make.contigs", type="choice",
-                 choices=("make.contigs","flash"),
+                 choices=("make.contigs","flash","none"),
                  help="Method for merging paired-end reads into contigs\n[%default]", metavar="mate_merger")
 
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
