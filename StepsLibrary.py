@@ -1909,6 +1909,8 @@ class   AlignmentSummary(DefaultStep):
             
         self.message("summarizing an alignment in %s" % (f) )
         k = "%spython %s/alignmentSummary.py -P %s -M %s -t 500 -p %s -i %s -o %s.alsum -T %s -x %s" % (binpath, scriptspath, self.project, self.mailaddress, ref, f,f, th, binpath)
+        if YAPGlobals.debug_grid_tasks:
+            k += " --debug-grid-tasks"
         self.message(k)
         task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
         task.wait()     

@@ -165,6 +165,9 @@ parser.add_option("-M", "--mail", dest="mailaddress", default="sszpakow@jcvi.org
 parser.add_option("-x", "--exepath", dest="binpath", default="",
                   help="path to python binary", metavar="path")                
                   
+parser.add_option("--debug-grid-tasks", dest="debug_grid_tasks", action="store_true", default=False,
+                  help="Debug grid tasks")                
+
 (options, args) = parser.parse_args()
 
 
@@ -275,7 +278,8 @@ if options.master:
                 c3 = cols[2]
             else:
                 tmp = cols[2]
-                
+                ## This just effectively adds so far accumulated c3 and current cols[2]
+                ## element-wise. Seems like a convoluted way.
                 c3 = [c3[index]+val for index, val in enumerate(tmp)]
             
             
@@ -284,7 +288,10 @@ if options.master:
             
             for XXX in glob.glob("tmp.%s.*" % (batch)):
                 print "-%s" % (XXX)
-                p = Popen(shlex.split("rm %s" % (XXX)),  stdout=PIPE)
+                if not options.debug_grid_tasks:
+                    p = Popen(shlex.split("rm %s" % (XXX)),  stdout=PIPE)
+                else:
+                    p = Popen(shlex.split("mv %s %s" % (XXX,"debug."+XXX+".debug")),  stdout=PIPE)
 
         if len(batches) in previousnums:
             pass
@@ -314,7 +321,7 @@ if options.master:
     coord2 = 0;
     for line in lines:
         c1, c2, val = line.strip().split()
-        val=int(val)-3
+        val=int(val)-3 ## What 3 is for? A.T.
         if val>thresh:
             coord1 = int(c1)
             break
@@ -368,6 +375,8 @@ else:
     counter=0   
     otpt = open(options.outfilename, 'w')
     for index, val in enumerate(refseq):
+        #this writes one line per each non-gap non-N position in the aligned E.coli reference
+        #alignment position\tungapped non-N E.coli position\tcount of bases aligned to that position
         if val==1:
             otpt.write("%s\t%s\t%s\n" % (index+1, counter+1, coords[index] ) )
             counter+=1      

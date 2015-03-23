@@ -790,6 +790,8 @@ if options.mode=="16S":
     _referenceseqname = "e_coli2_genbank"
     ### mothur's compendium of ALIGNED 16S sequences
     _alignment = "silva.seed_v119.align"
+    #DEBUG:
+    #_alignment = "silva.bacteria.fasta"
     ### mothur's compendium of ALIGNED 16S sequences for chimera detection
     _alignment_chimera = "silva.gold.align"
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
