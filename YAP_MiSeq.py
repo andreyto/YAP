@@ -427,7 +427,15 @@ def finalize(input):
         
     #### de-noise/unique collapse            
     CD_1 = CDHIT_454(options.nodesize, args, [clean2])
-    CD_2 = CDHIT_Mothurize(dict(), CD_1)
+    CD_2aa = CDHIT_Mothurize(dict(), CD_1)
+
+    if options.min_precluster_size > 0:
+        args = {"min_cluster_size": options.min_precluster_size} 
+        CD_2ab =  MakeAccnosFromName(args,[CD_2aa])
+        args = {}
+        CD_2 = MothurStep("remove.seqs",options.nodesize, dict(), args, [CD_2ab])
+    else:
+        CD_2 = CD_2aa
        
     args = {"mingroupmembers": 0, 
             "report": "passing"}
@@ -720,6 +728,9 @@ group.add_option("-m", "--minlen", dest="minlength", default=200, type="int",
 
 group.add_option("-g", "--mingroupsize", dest="mingroupmembers", default=100, type="int",
                  help="after demultiplexing, discard groups with fewer reads than #\n[%default]", metavar="#")
+
+group.add_option("--min-precluster-size", dest="min_precluster_size", default=0, type="int",
+                 help="after pre-clustering, discard clusters with fewer sequences than #\n[%default]. Set to 2 to discard singletons.", metavar="#")
 
 group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", default=3, type="int",
                  help="Keep stretches of reads this good or better before merging paired reads (zero means no trimming)#\n[%default]", metavar="#")

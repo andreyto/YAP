@@ -2129,6 +2129,27 @@ class   CDHIT_Perls(DefaultStep):
         for task in tasks:
             task.wait()                 
     
+class   MakeAccnosFromName(DefaultStep):
+    def __init__(self, ARGS, PREV):
+        DefaultStep.__init__(self)
+        #self.setInputs(INS)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("MakeAccnosFromName")
+        self.start()
+        
+    def performStep(self):
+    
+        n = self.find("name")  
+        assert len(n) == 1
+        n = n[0]
+    
+        k = "{}python {}MakeAccnosFromName.py -n {}  --min-cluster-size {}".format(binpath, 
+                scriptspath, n, self.getInputValue("min_cluster_size"))    
+        self.message(k)
+        task = GridTask(template="pick", name=self.stepname, command=k, dependson=list(), cwd = self.stepdir)
+        task.wait() 
+
 class   CDHIT_Mothurize(DefaultStep):
     def __init__(self, ARGS, PREV):
         DefaultStep.__init__(self)
