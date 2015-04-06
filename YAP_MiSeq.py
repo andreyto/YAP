@@ -724,7 +724,7 @@ group.add_option("-m", "--minlen", dest="minlength", default=200, type="int",
 group.add_option("-g", "--mingroupsize", dest="mingroupmembers", default=100, type="int",
                  help="after demultiplexing, discard groups with fewer reads than #\n[%default]", metavar="#")
 
-group.add_option("--min-precluster-size", dest="min_precluster_size", default=0, type="int",
+group.add_option("--min-precluster-size", dest="min_precluster_size", default=2, type="int",
                  help="after pre-clustering, discard clusters with fewer sequences than #\n[%default]. Set to 2 to discard singletons.", metavar="#")
 
 group.add_option("-Z", "--minqual-before-pair-merge", dest="minqual_merge", default=3, type="int",
