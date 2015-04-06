@@ -38,6 +38,17 @@ _date="2012/09/20"
 _version="Version 2"
 
 
+
+def pseudo_shuffle(strings,skip=0):
+    """Shuffle strings deterministically (by hash).
+    Keep the original position of the first 'skip' elements"""
+    it = iter(strings)
+    for i in xrange(skip):
+        yield next(it)
+    pairs = [ (hashlib.md5("{}.{}".format(t[1],t[0])).hexdigest(),t[1]) for t in enumerate(it) ]
+    for t in sorted(pairs):
+        yield t[1]
+
 #################################################
 ##      Classes
 ##
@@ -573,7 +584,8 @@ class   TaskQueueStatus(ReportingThread):
     ### 
 class GridTask():
     def __init__(self, template="default.q", command = "", name="default", 
-            cpu="1", dependson=list(), cwd=".", debug=None, mem_per_cpu=2):
+            cpu="1", dependson=list(), cwd=".", debug=None, mem_per_cpu=2,
+            sleep_start=0):
 
         if debug is None:
             debug = YAPGlobals.debug_grid_tasks
@@ -624,8 +636,10 @@ class GridTask():
         if len(dependson)>0:
             holdfor = "-hold_jid "
             for k in dependson:
-                holdfor = "%s%s," % (holdfor, k.getJobid())
+                raise ValueError("Job dependencies do not work yet because jobs are submitted from a separate thread and getGridId() returns -1 at this point")
+                holdfor = "%s%s," % (holdfor, k.getGridId())
             holdfor=holdfor.strip(",")      
+            sleep_start = max(sleep_start,10) # let files on shared FS to appear
         else:
             holdfor = ""    
         
@@ -634,7 +648,7 @@ class GridTask():
             self.retainstreams=""
         
             
-        ### To source the proper envirnoment, create a script with the command, 
+        ### To source the proper environment, create a script with the command, 
         ### and first source the RC file, then invoke that instead of submitting
         ### the command directly. Note that the -V option to qsub does not
         ### propagate LD_LIBRARY_PATH, which is squashed by the kernel for sudo
@@ -654,7 +668,12 @@ class GridTask():
                 os.close(scriptfile)
             self.scriptfilepath = scriptfilepath
             os.chmod(self.scriptfilepath,  0777 )
-            input= "#!/bin/bash\n. {}\n{}\n".format(rcfilepath,self.inputcommand)
+            if sleep_start > 0:
+                import random
+                sleep_cmd = "sleep {}".format(sleep_start+random.randint(1,5))
+            else:
+                sleep_cmd = ""
+            input= "#!/bin/bash\n. {}\n{}\n{}\n".format(rcfilepath,sleep_cmd,self.inputcommand)
             with open(self.scriptfilepath, "w") as scriptfile:
                 scriptfile.write(input)
         finally:
@@ -679,23 +698,28 @@ class GridTask():
         self.command = self.templates[self.queue]
         BOH.toPrint("-----","BATCH","command: '{}'".format(self.command))
         
-        
-        err = ""
-        for i_try in range(3):
-            time.sleep(2**(i_try+1)-2)
-            p = Popen(shlex.split(self.command), stdout=PIPE, stderr=PIPE, cwd=self.cwd, close_fds=True)
-            out, err = p.communicate()
-                
-            err = err.strip()
-            out = out.strip()
-            
-            if p.returncode == 0:
-                assert out.endswith("has been submitted"),"Unexpected content in qsub output: {}".format(out)
-                self.gridjobid = out.split(" ")[2]
-                break
-            BOH.toPrint("-----","BATCH","qsub error '{}', trying again...".format(err))
+        if YAPGlobals.dummy_grid_tasks:
+            check_call(["bash",self.scriptfilepath],cwd=self.cwd, close_fds=True)
+            self.gridjobid = 0
         else:
-            BOH.toPrint("-----","BATCH","submit() multiple qsub errors '{}', giving up".format(err))
+            err = ""
+            for i_try in range(3):
+                time.sleep(2**(i_try+1)-2)
+                p = Popen(shlex.split(self.command), stdout=PIPE, stderr=PIPE, cwd=self.cwd, close_fds=True)
+                out, err = p.communicate()
+                    
+                err = err.strip()
+                out = out.strip()
+                
+                if p.returncode == 0:
+                    assert out.endswith("has been submitted"),"Unexpected content in qsub output: {}".format(out)
+                    self.gridjobid = out.split(" ")[2]
+                    BOH.toPrint("-----","BATCH","qsub output '{}'".format(out))
+                    BOH.toPrint("-----","BATCH","getGridId {}".format(self.getGridId()))
+                    break
+                BOH.toPrint("-----","BATCH","qsub error '{}', trying again...".format(err))
+            else:
+                BOH.toPrint("-----","BATCH","submit() multiple qsub errors '{}', giving up".format(err))
 
                     
         return (self.getGridId())
@@ -2020,6 +2044,108 @@ class   GroupRetriever(DefaultStep):
         else:
             groupnames  = "-".join(failinggroups)   
         self.setOutputValue("groups", groupnames)
+
+class   CDHIT_Preclust(DefaultStep):
+    def __init__(self, nodeCPUs, ARGS, PREV):
+        DefaultStep.__init__(self)
+        if ARGS.has_key("T"):
+            self.nodeCPUs = ARGS["T"]
+        else:
+            self.nodeCPUs=nodeCPUs
+            ARGS["T"]=self.nodeCPUs     
+
+        #self.setInputs(INS)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("CDHIT_Preclust")
+        self.start()
+                        
+    def performStep(self):
+
+        cdhitpath = globals()["cdhitpath"] ## to be found by locals()
+
+        args = ""   
+                
+        for arg, val in self.arguments.items():
+            args = "%s -%s %s" % (args, arg, val) 
+
+        fs = self.find("fasta")
+        if len(fs)==0:
+            fs.extend(self.find("mate1"))
+            fs.extend(self.find("mate2"))
+
+        scratch_dir = os.path.join(self.stepdir,"scratch")
+        if not os.path.isdir(scratch_dir):
+            os.makedirs(scratch_dir)
+        scratch_dir = "scratch"
+
+        for f in fs:
+            f_base=os.path.join(scratch_dir,os.path.basename(f))
+            work_base="{f_base}.db-uniq-split".format(**locals())
+            db_uniq_clstr="{f_base}.db-uniq.clstr".format(**locals())
+            
+            k = "{cdhitpath}cd-hit-dup -i {f} -o {f_base}.db-uniq -m false -e 4".format(**locals())
+            
+            self.message(k)
+            task_dup = GridTask(template=defaulttemplate, name=self.stepname+"_dup", command=k, cpu=1,  mem_per_cpu=31, dependson=list(), cwd = self.stepdir)
+            task_dup.wait()
+
+            n_parts = 10 ##todo: compute from file size
+            
+            k = "{cdhitpath}cd-hit-div.pl {f_base}.db-uniq {work_base} {n_parts}".format(**locals())
+            
+            self.message(k)
+            task_split = GridTask(template=defaulttemplate, name=self.stepname+"_div", command=k, cpu=1,  dependson=[], cwd = self.stepdir)
+            task_split.wait()
+            tasks_454 = []
+            splits_fasta=[]
+            splits_clstr=[]
+            for i_div in range(n_parts):
+                db_uniq_split="{}-{}".format(work_base,i_div)
+                n_cpu_454=4
+                
+                k = """{cdhitpath}cd-hit-454 -i {db_uniq_split} -o {db_uniq_split}.nr1 -c 0.99 -n 10 -b 10 -g 0 -M 0 -aS 0.0 -T {n_cpu_454} && \
+                       {cdhitpath}clstr_rev.pl {db_uniq_clstr} {db_uniq_split}.nr1.clstr > {db_uniq_split}.nr1-all.clstr && \
+                       {cdhitpath}clstr_sort_by.pl < {db_uniq_split}.nr1-all.clstr > {db_uniq_split}.nr1-all.sort.clstr""".format(**locals())
+                
+                self.message(k)
+                
+                tasks_454.append(GridTask(template=defaulttemplate, name=self.stepname+"_div_454", command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir))
+                
+                splits_fasta.append("{db_uniq_split}.nr1".format(**locals()))
+                splits_clstr.append("{db_uniq_split}.nr1-all.sort.clstr".format(**locals()))
+
+            for task in tasks_454:
+                task.wait()
+            
+            ## concatenate results from splits
+            
+            k = """cat {} > {}.nr1-all.sort.clstr && \
+                   cat {} > {}.nr1""".format(" ".join(splits_clstr),
+                           work_base,
+                           " ".join(splits_fasta),
+                           work_base)
+            
+            self.message(k)
+            task_cat = GridTask(template=defaulttemplate, name=self.stepname+"_cat", command=k, cpu=1,  dependson=[], cwd = self.stepdir)
+            task_cat.wait()
+            n_cpu_454=self.nodeCPUs
+            if not YAPGlobals.debug_grid_tasks:
+                cleanup_cmd = "&& rm -rf scratch"
+            else:
+                cleanup_cmd = ""
+            
+            k = """{cdhitpath}cd-hit-454 -i {work_base}.nr1 -o {work_base}.nr1.nr2 -c 0.98 -n 10 -b 10 -g 0 -M 0 -aS 0.0 -T {n_cpu_454} && \
+                   {cdhitpath}clstr_rev.pl {work_base}.nr1-all.sort.clstr {work_base}.nr1.nr2.clstr > {work_base}.nr1.nr2-all.clstr && \
+                   {cdhitpath}clstr_sort_by.pl < {work_base}.nr1.nr2-all.clstr > {work_base}.nr1.nr2-all.sort.clstr && \
+                   mv {work_base}.nr1.nr2 {f}.cdhit && \
+                   mv {work_base}.nr1.nr2-all.sort.clstr {f}.cdhit.clstr \
+                   {cleanup_cmd}""".format(**locals())
+            
+            self.message(k)
+            task_all_454 = GridTask(template=defaulttemplate, name=self.stepname+"_all_454", command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir)
+            task_all_454.wait()
+            
 
 class   CDHIT_454(DefaultStep):
     def __init__(self, nodeCPUs, ARGS, PREV):

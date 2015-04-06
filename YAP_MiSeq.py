@@ -48,7 +48,7 @@ class InfoValidator:
         primersR = set()
         sampleIDs = set()
                 
-        for line in self.info:
+        for line in pseudo_shuffle(self.info,skip=1):
             if counter == 0: 
                 self.header = line
                 has =  ",".join (self.header)
@@ -172,7 +172,7 @@ class InfoParserMiSeq:
         self.forward = ""
         self.reverse = ""
         
-        for line in self.info:
+        for line in pseudo_shuffle(self.info,skip=1):
             path = os.path.abspath(line[0].strip())
             file1 = line[1].strip()
             file2 = line[2].strip()
@@ -408,25 +408,20 @@ def finalize(input):
                         "c" : "1.0",
                         "b" : "8",
                         "aS": "1.0",
-                        "g" : "1",
+                        "g" : "0",
                         "M"    : "50000",
                         "T" : "%s" % (options.nodesize)
                        
                     }
+        CD_1 = CDHIT_454(options.nodesize, args, [clean2])
     
     ### aggressive de-noising:
     elif options.strictlevel==2:
         args=         { 
-                        "c" : "0.98",
-                        "b" : "10",
-                        "aS": "0.0",
-                        "g" : "1",
-                        "M"    : "0",
                         "T" : "%s" % (options.nodesize)
                     }
+        CD_1 = CDHIT_Preclust(options.nodesize, args, [clean2])
         
-    #### de-noise/unique collapse            
-    CD_1 = CDHIT_454(options.nodesize, args, [clean2])
     CD_2aa = CDHIT_Mothurize(dict(), CD_1)
 
     if options.min_precluster_size > 0:
@@ -599,7 +594,7 @@ def CDHITCluster(input):
                 "d" : "0",
                 "n": "8",
                 "g": "1",
-                "M": "10000",
+                "M": "0",
                 "T": "%s" % (options.nodesize) 
                 }
         
@@ -771,12 +766,15 @@ group.add_option("-G", "--debug-grid-tasks", dest="debug_grid_tasks", action = "
                  help="Debug GridTasks by default\n[%default]", metavar="#")
 group.add_option("-T", "--step-dummy-thread", dest="step_dummy_thread", action = "store_true", default=False,
                  help="Use dummy threads inside the main thread for StepXXX classes (for interactive debugging)\n[%default]", metavar="#")
+group.add_option("--dummy-grid-tasks", dest="dummy_grid_tasks", action = "store_true", default=False,
+                 help="Use dummy grid tasks that run tasks inside the current process in a blocking subprocess (for debugging). Probably use with dummy threads or you can flood the current node from multiple threads\n[%default]", metavar="#")
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
 
 YAPGlobals.debug_grid_tasks = options.debug_grid_tasks
 YAPGlobals.step_dummy_thread = options.step_dummy_thread
+YAPGlobals.dummy_grid_tasks = options.dummy_grid_tasks
 
 #################################################
 ##        Begin
