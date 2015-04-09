@@ -147,7 +147,8 @@ else:
         for (repr,elems) in clstr_reader(options.fn_clstr):
             ## repr should be listed first, so we write it out and exclude from the elems
             out.write("\t{}".format(repr))
-            if len(elems) > 1:
+            ## if something else is in either new or old cluster aside from repr
+            if len(elems) > 1 or names[repr] != repr:
                 out.write(",")
                 out.write(",".join(
                     iter_elems_with_names(elems,names,repr=repr)
