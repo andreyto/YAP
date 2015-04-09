@@ -17,6 +17,8 @@ from collections import defaultdict
 from collections import deque
 from random import *
 from Queue import *
+##threading redefines enumerate() with no arguments. as a kludge, we drop it here
+globals().pop('enumerate',None)
 
 
 _author="Sebastian Szpakowski"
@@ -1401,19 +1403,27 @@ class   FastaHeadHash(DefaultStep):
         tasks = list()
         
         m1 = self.find("fasta")
-                
+
+        prefix = self.arguments.pop("--prefix","")
+        id_gen = self.arguments.pop("--id-gen","iid")
+
+        if id_gen == "iid":
+            assert prefix
+
         argstring = ""
         for arg, val in self.arguments.items():
             argstring = "%s %s %s " % (argstring, arg, val) 
 
         tasks = list()
         self.message("processing %s files..." % len(m1))
-        for file in m1:
-            suffix = file.split(".")[-1]
-            prefix = ".".join(file.split(".")[:-1])
-            k = "%spython %sFastaUniversalRenamer.py %s --fasta %s" % (binpath, scriptspath, argstring, file)
-            if len(m1)<10:
-                self.message(k)
+        for (i_file,file) in enumerate(m1):
+            if id_gen == "iid" and len(m1) > 1:
+                this_prefix = "{}x{}".format(prefix,i_file)
+            else:
+                this_prefix = prefix
+            k = "%spython %sFastaUniversalRenamer.py %s --fasta %s --prefix '%s' --id-gen '%s'" % \
+                    (binpath, scriptspath, argstring, file, this_prefix, id_gen)
+            self.message(k)
             task = GridTask(template="pick", name="%s" % (self.stepname), command=k, cpu=1,  cwd = self.stepdir)
             tasks.append(task)
             
