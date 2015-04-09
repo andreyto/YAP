@@ -16,6 +16,8 @@ from StepsLibrary import *
 from StepsLibrary_EXP import *
 from collections import defaultdict
 from Queue import Queue
+##threading redefines enumerate() with no arguments. as a kludge, we drop it here
+globals().pop('enumerate',None)
 
 _author="Sebastian Szpakowski"
 _date="2013/04/01"
@@ -251,7 +253,7 @@ def preprocess():
     forprocessing = InfoParserMiSeq(options.fn_info)
     PREPROCESS = list()
 
-    for files in forprocessing.getFiles():
+    for (i_sample,files) in enumerate(forprocessing.getFiles()):
         INS = {}
         
         
@@ -357,7 +359,7 @@ def preprocess():
         P4 = PrimerClipper ( {}, ARGS, [P3])
 
         ### make fastA headers less problematic
-        P5 = FastaHeadHash({}, {}, [P4])
+        P5 = FastaHeadHash({}, { "--prefix":"{}".format(i_sample), "--id-gen":"iid" }, [P4])
         P6 = FileMerger("fasta", [P5])
         P7 = MakeGroupsFile([P6], sampleid)
         P8 = MakeNamesFile([P6])
@@ -425,6 +427,7 @@ def finalize(input):
     CD_2aa = CDHIT_Mothurize(dict(), CD_1)
 
     if options.min_precluster_size > 0:
+        ##TODO: replace with Mothur command split.abund
         args = {"min_cluster_size": options.min_precluster_size} 
         CD_2ab =  MakeAccnosFromName(args,[CD_2aa])
         args = {}
@@ -496,6 +499,48 @@ def finalize(input):
         output2 = x
         
     return (output2)
+    
+
+def remove_chimera(input):
+    ####### find chimeric sequences  
+    toremove = list()
+    for ch in [ "uchime" ]:
+        ### chimeras against reference
+        args = {"force" : "fasta,reference", "dereplicate" : "t"}
+        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
+        
+        A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, input)    
+        
+        toremove.append(A)
+        
+        if not options.quickmode:
+            ### chimeras against self
+            ### Seems like a bug in Mothur - it prints errors that non-centroid
+            ### (non-unique) sequences from name file are not found in fasta file (and they
+            ### should not be). To work around it, we create a count file just for this
+            ### chimera.uchime
+            A1 = MothurStep("count.seqs",1, {}, {"force":"name,group"}, input)    
+
+            args ={"force_exclude": "name,group", "force": "count,fasta", "dereplicate" : "t"}
+            inputs = {}
+            
+            A2 = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, A1)    
+            ### hide count file from later steps
+            A = MaskType("count",A2)
+
+            toremove.append(A)
+        
+    ### merge all accnos files and remove ALL chimeras    
+    allchimeras = FileMerger("accnos", toremove)
+
+
+    args ={"force_exclude": "fastq"}
+    B = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
+    
+    ####### remove empty columns after chimeras were removed
+    args = {"vertical" : "T"} #somehow trump=. here removes everything
+    out = MothurStep("filter.seqs",options.nodesize, dict(), args, [B]) 
+    return out
 
 def cleanup(input):
 
@@ -515,28 +560,6 @@ def cleanup(input):
             }
     s16 = MothurStep("screen.seqs", options.nodesize, dict(), args, [s15])
     
-    ####### find chimeric sequences  
-    toremove = list()
-    for ch in [ "uchime" ]:
-        ### chimeras against reference
-        args = {"force" : "fasta,reference", "dereplicate" : "t"}
-        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
-        
-        A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
-        toremove.append(A)
-        
-        if not options.quickmode:
-            ### chimeras against self
-            args ={"force": "name,group,fasta", "dereplicate" : "t"}
-            inputs = {}
-            
-            A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
-            toremove.append(A)
-        
-    ### merge all accnos files and remove ALL chimeras    
-    allchimeras = FileMerger("accnos", toremove)
-    args ={"force_exclude": "fastq"}
-    s17 = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
     
     #### if primer trimming points are not unknown
     if _trimstart!=_trimend:
@@ -552,7 +575,7 @@ def cleanup(input):
         }
      
         
-    s18a = AlignmentTrim(dict(), args, [s17])
+    s18a = AlignmentTrim(dict(), args, [s16])
             
     ####### remove sequence fragments, bad alignments (?) 
     args = {}
@@ -564,6 +587,7 @@ def cleanup(input):
         args = { "minlength" : "%s" % (options.minlength),
                  "force": "fasta,name,group"}
     s18b = MothurStep("screen.seqs", options.nodesize, dict(), args, [s18a])
+
     
     ### build a tree
     #s18b_tree = ClearcutTree({}, s18b)
@@ -571,6 +595,8 @@ def cleanup(input):
     ####### remove empty columns
     args = {"vertical" : "T"} #somehow trump=. here removes everything
     s19 = MothurStep("filter.seqs",options.nodesize, dict(), args, [s18b]) 
+    
+    s19a = remove_chimera(s19)
     
     ####### taxonomy
     inputs = {    "reference": ["%s/%s" % (options.dir_anno,_trainset)],
@@ -580,7 +606,7 @@ def cleanup(input):
     args = {    "iters" : "100",
             "cutoff":  "60"
             }
-    s20 = MothurStep("classify.seqs", options.nodesize, inputs, args, [s19])
+    s20 = MothurStep("classify.seqs", options.nodesize, inputs, args, [s19a])
     
     ### remove - and . for subsequent clustering efforts 
     s21 = CleanFasta(dict(), [s20])
