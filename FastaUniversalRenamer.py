@@ -67,6 +67,16 @@ class FastaParser:
     def __str__():
         return ("reading file: %s" %self.filename) 
         
+
+class iid_gen:
+    
+    def __init__(self,start=0):
+        self.curr = start
+
+    def __call__(self,head):
+        self.curr += 1
+        return str(self.curr)
+
 #################################################
 ##        Functions
 ##
@@ -75,10 +85,11 @@ class FastaParser:
 ##        Arguments
 ##
 
-_arguments = argparse.ArgumentParser(description='replace the entire line of fasta header with a unique, hash', epilog='if all else fails: shpakoo@gmail.com')
+_arguments = argparse.ArgumentParser(description="""replace the entire line of fasta header with a UUID \
+        or a combination of user provided prefix and incremented integer index""")
 _arguments.add_argument('--fasta', metavar='N', type=str, dest = "fn_fasta")
 _arguments.add_argument('--prefix', metavar='N', type=str, dest = "prefix", default="")
-_arguments.add_argument('--id-gen', metavar='N', type=str, dest = "id_gen", default="uuid32", choices = ("uuid32","sha256","md5"))
+_arguments.add_argument('--id-gen', metavar='N', type=str, dest = "id_gen", default="uuid32", choices = ("iid","uuid32","sha256","md5"))
 args = _arguments.parse_args()
 
 
@@ -99,16 +110,20 @@ elif args.id_gen == "md5":
 elif args.id_gen == "uuid32":
     import uuid
     id_gen = lambda h: uuid.uuid4().hex
+elif args.id_gen == "iid":
+    id_gen = iid_gen()
 else:
     raise ValueError(args.id_gen)
 
-
+prefix = args.prefix
+if prefix:
+    prefix = prefix + "_"
 
 for head, seq in FastaParser(args.fn_fasta):
     ## sha256 hex is 64 byte; md5 is 32 byte
     newhead =  id_gen(head)
-    otptseq.write(">{2}{0}\n{1}\n".format(newhead,seq, args.prefix) )
-    otptmap.write("{2}{0}\t{1}\n".format(newhead, head, args.prefix) )          
+    otptseq.write(">{2}{0}\n{1}\n".format(newhead,seq, prefix) )
+    otptmap.write("{2}{0}\t{1}\n".format(newhead, head, prefix) )          
     
 otptseq.close()
 otptmap.close()
@@ -116,3 +131,4 @@ otptmap.close()
 #################################################
 ##        Finish
 #################################################
+
