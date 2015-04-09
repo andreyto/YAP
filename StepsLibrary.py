@@ -12,8 +12,6 @@
 import YAPGlobals
 import sys, tempfile, shlex, glob, os, stat, hashlib, time, datetime, re, curses
 from threading import *
-##threading redefines enumerate() with no arguments. as a kludge, we drop it here
-del globals()['enumerate']
 import dummy_threading
 from subprocess import *
 from MothurCommandInfoWrapper import *
@@ -32,6 +30,8 @@ from email import Encoders
 
 import traceback
 import pdb
+##threading redefines enumerate() with no arguments. as a kludge, we drop it here
+globals().pop('enumerate',None)
 
 _author="Sebastian Szpakowski"
 _date="2012/09/20"
@@ -890,6 +890,11 @@ class   DefaultStep(DefaultStepBase):
             if v=="":
                 v=" "
             self.arguments[k] = v
+
+    def setMasks(self,mask_types):
+        for mask_type in mask_types:
+            self.setMask(mask_type)
+
     def setPrevious(self, x):
         if isinstance(x,DefaultStep):
             self.previous.append(x)
@@ -1113,6 +1118,8 @@ class   DefaultStep(DefaultStepBase):
         elif extension == "tax":
             return "taxonomy"
         
+        elif extension in ("count_table","count"):
+            return "count"
         elif extension == "names":
             return "name"
         elif extension == "groups":
@@ -1207,12 +1214,19 @@ class   DefaultStep(DefaultStepBase):
     def isVar(self,x):
         return x.startswith("[var]")
     
+    def isMask(self,x):
+        return x.startswith("[mask]")
+    
     def getOutputs(self, arg):
         if self.outputs.has_key(arg):
             otpt = list()
             for x in unlist(self.outputs[arg]):
                 if self.isVar(x):
                     otpt.append(x)
+                elif self.isMask(x):
+                    ## masked type is in outputs, so no recursive search, but nothing
+                    ## is returned either - so it is ignored 
+                    pass 
                 else:
                     otpt.append("../%s/%s" % (self.stepdir, x))
             return otpt
@@ -1292,6 +1306,9 @@ class   DefaultStep(DefaultStepBase):
             
     def setOutputValue(self, arg, val):
         self.outputs[arg] = ["[var]%s" % (val)] 
+                
+    def setMask(self, mask_type):
+        self.outputs[mask_type] = ["[mask]"] 
                 
     def __str__(self):
         otpt = "%s\t%s" % (self.stepname, self.name)
@@ -1809,6 +1826,23 @@ class   FileType(DefaultStep):
         for task in tasks:
             task.wait()
             time.sleep(1)           
+
+class   MaskType(DefaultStep):
+    """This masks a list of file types so that they are never found by downstream steps"""
+
+    def __init__(self, TYPES, PREV):     
+        DefaultStep.__init__(self)
+        #self.setInputs(INS)
+        ARGS = {"types":TYPES}
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("MASK_type")
+        #self.nodeCPUs=nodeCPUs
+        self.start()
+        
+    def performStep(self):
+        self.setMasks(self.getInputValue("types").strip().split(","))
+            
             
 class   CleanFasta(DefaultStep):
     def __init__(self, INS, PREV):      
