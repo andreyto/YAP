@@ -10,139 +10,86 @@
 #################################################
 import sys
 from optparse import OptionParser
-from collections import defaultdict
+import itertools
 
-_author="Sebastian Szpakowski"
-_date="2011/01/01"
-_version="Version 1"
+_author="Andrey Tovchigrechko"
+_date="2015/04/08"
+_version="Version 2"
 
 #################################################
-##      Classes
+##      Methods
 ##
-    #################################################
-    ### Iterator over input file.
-    ### every line is converted into a dictionary with variables referred to by their 
-    ### header name
-class   GeneralPurposeParser:
-    def __init__(self, file, skip=0, sep="\t"):
-        self.filename = file
-        self.fp = open(self.filename, "r")  
-        self.sep = sep
-        self.linecounter = 0
-        self.currline=""
-        
-    def __iter__(self):
-        return (self)
-    
-    def next(self):
-        otpt = dict()
-        for currline in self.fp:
-            currline = currline.strip().split(self.sep)
-            self.currline = currline
-            self.linecounter = self.linecounter + 1
-            return(currline)            
-        raise StopIteration
-                    
-    def __str__(self):
-        return "%s [%s]\n\t%s" % (self.filename, self.linecounter, self.currline)
-        
-        
-class   FastaLikeParser:
-    def __init__ (self, x):
-        self.filename = x
-        self.fp = open(x, "r")  
-        self.currline = "" 
-        self.currentFastaName = ""
-        self.currentFastaSequence = ""
-        self.lastitem=False 
-            
-    def __iter__(self):
-        return(self)    
-                
-        ##### 
-    def next(self):
-        for self.currline in self.fp:
-            if self.currline.startswith(">"):
-                self.currline = self.currline[1:]
-                if self.currentFastaName == "":
-                    self.currentFastaName = self.currline
-                else:
-                    otpt = (self.currentFastaName.strip(), self.currentFastaSequence.strip())
-                    self.currentFastaName = self.currline
-                    self.currentFastaSequence = ""  
-                    self.previoustell = self.fp.tell()
-                    return (otpt)
-                
+
+def clstr_reader(file_name):
+    """Iterate over sequence IDs in CDHIT cluster file.
+    Yield tuples (representative ID, list of other IDs 
+    including the representative."""
+
+    with open(file_name,"r") as inp:
+        line = inp.next()
+        assert line[0] == ">"
+        repr = None
+        clust = []
+        for line in inp:
+            if line[0] == ">":
+                assert repr and clust
+                yield (repr,clust)
+                repr = None
+                clust = []
             else:
-                self.addSequence(self.currline) 
-        
-        if not self.lastitem:
-            self.lastitem=True          
-            return (self.currentFastaName.strip(), self.currentFastaSequence.strip())
-        else:
-            raise StopIteration 
-                                
-    def addSequence(self, x):
-        self.currentFastaSequence = "%s\n%s" % (self.currentFastaSequence, x.strip())           
-                        
-    def __str__():
-        return ("reading file: %s" %self.filename)      
-        
-        
-    #################################################
-    ### Iterator over input fata file.
-    ### Only reading when requested
-    ### Useful for very large FASTA files
-    ### with many sequences
-class   FastaParser:
-    def __init__ (self, x, quals=False):
-        self.filename = x
-        self.fp = open(x, "r")  
-        self.currline = "" 
-        self.currentFastaName = ""
-        self.currentFastaSequence = ""
-        self.lastitem=False 
-        if quals:
-            self.linesep=" "    
-        else:
-            self.linesep="" 
-    def __iter__(self):
-        return(self)    
-                
-        ##### 
-    def next(self):
-        for self.currline in self.fp:
-            if self.currline.startswith(">"):
-                self.currline = self.currline[1:]
-                if self.currentFastaName == "":
-                    self.currentFastaName = self.currline
-                else:
-                    otpt = (self.currentFastaName.strip(), self.currentFastaSequence.strip())
-                    self.currentFastaName = self.currline
-                    self.currentFastaSequence = ""  
-                    self.previoustell = self.fp.tell()
-                    return (otpt)
-                
+                id_seq = line.split(">",1)[1].split("...",1)[0]
+                clust.append(id_seq)
+                if line.rstrip()[-1] == "*":
+                    repr = id_seq
+        if clust:
+            yield (repr,clust)
+
+def iter_str_split(s,sep):
+    """Constant memory (iterator) string splitter.
+    Note that this will not work correctly on empty fields (e.g. ',,')
+    """
+
+    return (x.group(0) for x in re.finditer(r"[^{}]+".format(sep), s))
+
+def iter_elems_with_names(elems,names=None,no_split=True, repr=None):
+    """Join elems iterable with optional names dict, where elems are
+    keys in the dict, and iterate over all values.
+    @param no_split If True, do not split names values by commas"""
+    if names:
+        if no_split:
+            if repr:
+                return itertools.chain.from_iterable(
+                        (iter_cut_word(names[elem],repr,",") if elem == repr else (names[elem],) for elem in elems)
+                        )
             else:
-                self.addSequence(self.currline) 
-        
-        if not self.lastitem:
-            self.lastitem=True          
-            return (self.currentFastaName.strip(), self.currentFastaSequence.strip())
+                return (( names[elem] for elem in elems ))
         else:
-            raise StopIteration 
-                                
-    def addSequence(self, x):
-        self.currentFastaSequence = "%s%s%s" % (self.currentFastaSequence,self.linesep, x.strip())          
-                        
-    
-    def __str__():
-        return ("reading file: %s" %self.filename)  
-        
-        
-#################################################
-##      Functions
-##
+            if repr:
+                return itertools.chain.from_iterable(( iter_str_split(names[elem],",") for elem in elems if elem != repr ))
+            else:
+                return itertools.chain.from_iterable(( iter_str_split(names[elem],",") for elem in elems ))
+    else:
+        return elems
+
+def iter_cut_word(s,w,sep,required=True):
+    """'aaa,bbb,xxx,zzz' -> ('aaa','xxx,zzz')"""
+    if s == w:
+        pass
+    else:
+        ind = s.find(sep+w+sep)
+        if ind > 0:
+            yield s[0:ind]
+            yield s[ind+len(sep+w+sep):]
+        elif ind < 0:
+            if s.endswith(sep+w):
+                yield s[:-len(sep+w)]
+            elif s.startswith(w+sep):
+                yield s[len(w+sep):]
+            elif required:
+                raise ValueError("Match for {} not found".format(w))
+        else:
+            raise ValueError("String should not start with a separator")
+
 
 #################################################
 ##      Arguments
@@ -163,90 +110,51 @@ parser.add_option("-o", "--output_mode", dest="out_mode", default = "name",
 #                  help="don't print status messages to stdout")
 
 
+
 (options, args) = parser.parse_args()
 
 #################################################
 ##      Begin
 ##
 
-names = defaultdict(set)
-outputnames = defaultdict(set)
 
 if options.fn_name != "" :
-    for id, desc in GeneralPurposeParser(options.fn_name, skip=0, sep="\t"):
-        [names[id].add(x) for x in desc.split(",")]
-                
-for clusterid, contents in FastaLikeParser(options.fn_clstr):
-    representative= ""
-    descendants = set()
-    for line in contents.strip().split("\n"):
-        line = line.strip()
-        id = line.split(">")[1].split("...")[0].split()[0]
-        if line.endswith("*"):
-            representative = id
-            #print "repr"
-        ### self is always a descendant of itself!
-        descendants.add(id)
-        [descendants.add(x) for x in  names[id]]    
-        
-    outputnames[representative] = descendants
-            
+    with open(options.fn_name,"r") as inp_names:
+        names = dict(( line.strip().split("\t",1) for line in inp_names ))
+
 if options.out_mode =="name":
-    prefix = options.fn_clstr.strip().split("/")[-1]
-    otptfile = open("%s.name" % (prefix), "w")  
     
-    for key, vals in outputnames.items():
-        otptfile.write("%s\t%s" % (key, key))
+    prefix = options.fn_clstr.strip().split("/")[-1]
+    
+    with open("%s.name" % (prefix), "w") as out:
         
-        vals.discard(key)
-        if len(vals)>0:
-            otptfile.write(",%s\n" % (",".join(list(vals))))
-        else:
-            otptfile.write("\n")
-        
-    otptfile.close()    
+        for (repr,elems) in clstr_reader(options.fn_clstr):
+            out.write("{}\t{}\n".format(repr,",".join(
+                iter_elems_with_names(elems,names)
+                )))
     
 else:
-    otus = defaultdict(list)
-    prefix = options.fn_clstr.strip().split("/")[-1]
-    listfile = open("%s.list" % (prefix), "w" )
-    listfile.write("%s\t%s" % (options.out_mode, len(outputnames.keys() )))
-    
-    rafile =open("%s.rabund" % (prefix), "w")
-    rafile.write("%s\t%s" % (options.out_mode, len(outputnames.keys() )))
-    
-    safile = open("%s.sabund" % (prefix), "w")
-    safile.write("%s" % (options.out_mode))
-    
-    mx = 0
-    for key, vals in outputnames.items():
-        otus[len(vals)].append(vals)
-        
-        ### the OTUs must start with a representative, followed by rest
-        #print key, vals
-        vals.remove(key)
-        curotu = "%s,%s" % (key, (",").join(list(vals)))
-        listfile.write("\t%s" % curotu.strip(","))
-        
-        ### we removed the representative, add one!)
-        rafile.write("\t%s" % (len(vals)+1))
-        mx = max (mx, len(vals)+1)
-    
-    safile.write("\t%s" % (mx) )
-    for x in range (max(otus.keys())):
-        x = x+1
-        safile.write("\t%s" % len(otus[x]))
-        
-    listfile.write("\n")    
-    rafile.write("\n")  
-    safile.write("\n")  
-    
-    
-    listfile.close()
-    rafile.close()
-    safile.close()  
-    
+    ## we only write list file - sabund and rabund should be created from list (and optional count)
+    ## files by Mothur commands get.sabund and get.rabund
 
+    ## we make two passes to avoid loading entire cluster file into RAM
+    n_otus = 0
+    for rec in clstr_reader(options.fn_clstr):
+        n_otus += 1
+    prefix = options.fn_clstr.strip().split("/")[-1]
+    with open("%s.list" % (prefix), "w" ) as out:
+        out.write("{}\t{}".format(options.out_mode, n_otus))
+        for (repr,elems) in clstr_reader(options.fn_clstr):
+            ## repr should be listed first, so we write it out and exclude from the elems
+            out.write("\t{}".format(repr))
+            if len(elems) > 1:
+                out.write(",")
+                out.write(",".join(
+                    iter_elems_with_names(elems,names,repr=repr)
+                    ))
+        out.write("\n")
+    
 #################################################
 ##      Finish
 #################################################
+

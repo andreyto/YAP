@@ -610,7 +610,9 @@ def CDHITCluster(input):
         args = {"mode": arg    
                 }
         CD_2 = CDHIT_Mothurize(args, CD_1)
-        CD_2a = CDHIT_Perls({}, CD_2)            
+        CD_2aa = MothurStep("get.sabund", 1, dict(), {}, [CD_2])
+        CD_2ab = MothurStep("get.rabund", 1, dict(), {}, [CD_2])
+        CD_2a = CDHIT_Perls({}, [CD_2aa,CD_2ab])            
         cdhits.append(CD_2)
                 
     READY = FileMerger("list,rabund,sabund", cdhits)    
@@ -674,13 +676,13 @@ def plotsAndStats(input):
     
     supplementary.append(s28)
     
-    args = {"force" : "list", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.01"}
-    s29 = MothurStep("rarefaction.single", options.nodesize, dict(), args, [s24])
     #return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29])
     
-    if options.quickmode:
-        return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29])
+    if options.no_statistics:
+        return ([s23, s24, s25aa, s25bb, s26a, s27a, s28])
     else:
+        args = {"force" : "list", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.01"}
+        s29 = MothurStep("rarefaction.single", options.nodesize, dict(), args, [s24])
         args = {"force" : "shared", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.05"}
         s30 = MothurStep("rarefaction.single",options.nodesize, dict(), args, [s24]) 
         return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29, s30])
