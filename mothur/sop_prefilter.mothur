@@ -13,8 +13,8 @@
 ## /path/to/mothur /path/to/sop_prefilter.mothur
 ## ```
 ## where your current working directory must have a file `input.files` in it
-## that is formatted as required by Mothur make.contigs() command. The above
-## will use 64 cores on a machine in himem queue. You should edit the 
+## that is formatted as required for Mothur make.contigs() command. The above
+## will use 64 cores on a machine in `himem` queue. You should edit the 
 ## set.current(processors=XX) command below to match that number.
 ## 
 ## If you need the script to stop mid-way (e.g. to figure out alignment trim points
@@ -26,7 +26,7 @@
 ## your `current` Mothur pseudovariables to the values they had before your first
 ## batch file finished execution. This script relies on `current` pseudovariable so that
 ## it would be easy to add commands in a middle without having to propagate changed
-## output file names downstream through the script.
+## output file names downstream throughout the script.
 ## Note: if you need more flexibility and robustness in building pipelines from Mothur
 ## commands, you should communicate with a Mothur instance through standard IO from a
 ## scripting language such as Python or Perl and extract the file names that it prints after
@@ -187,17 +187,19 @@ classify.seqs(fasta=current, count=current, reference=rdp.fasta, taxonomy=rdp.ta
 #remove.lineage(fasta=current, count=current, taxonomy=current, taxon=Chloroplast-Mitochondria-unknown-Archaea-Eukaryota)
 #summary.seqs(fasta=current, count=current)
 #
-## Optional for BEI only. HMP_MOCK.v35.fasta is only V3-V5 region - you would have to prepare your own cutout from the 
-## full-length BEI reference if interested in estimating the per-base error rate in annotated sequences when using BEI 
-## controls.
+## Optional for BEI only. HMP_MOCK.v35.fasta provided by the SOP is only V3-V5 region - you would have to 
+## prepare your own cutout from the full-length BEI reference if interested in estimating the per-base error 
+## rate in annotated sequences when using BEI controls.
 #seq.error(fasta=current,count=current,reference=HMP_MOCK.v35.fasta, aligned=F)
 #
 ## ==Final OTU clustering - the most resource-intensive step==
-## Note: monitor resource utilization on your compute node during large runs. On JCVI SGE cluster, you can loging
+## Note: monitor resource utilization on your compute node during large runs. On JCVI SGE cluster, you can login 
 ## to your batch node using: `qlogin -l hostname=hostname_where_mothur_job_runs_per_qstat -l trouble -P YOUR_PROJECT_CODE`
 ## and run `top` where.
 ## There are many variants how the combination of dist.seqs and cluster or cluster.split can be executed for
-## optimal speed and lower memory consumption (see Mothur docs). Below we let cluster.split to build distance matrix on the fly.
+## optimal speed and lower memory consumption (see Mothur docs). Below we let cluster.split to build distance matrix on 
+## the fly for the simplicity. The downside is that building the matrix will have to be repeated if cluster.split()
+## runs out of memory or otherwise does not succeed.
 ## Splits are done based on taxonomic classification at an order level. For very uneven communities, that might not
 ## buy you much.
 #dist.seqs(fasta=current, cutoff=0.20)
