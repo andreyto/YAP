@@ -1,0 +1,136 @@
+## We should be able to use the command below to control logfile name 
+## we would use it to checkpoint `current` variables by switching to
+## a new logfile temporarilty, using load.logfile() and set.logfile()
+## to restore the state and continue with the main logfile. Unfortunately,
+## set.logfile just does nothing in v.1.34 when called, and I still get the auto-
+## generated Mothur log. So I have to use system() calls.
+#set.logfile(name=main.logfile)
+#
+## It is important to perform various summary steps as per SOP, otherwise
+## (according to Vishal) sometimes count file does not get properly updated.
+set.current(processors=4)
+set.dir(tempdefault=/home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all)
+## cut for V13 - change for your region
+pcr.seqs(fasta=silva.seed_v119.align, start=1000, end=12400, keepdots=F)
+## loooks like a bug in pcr.seqs - no sequence starts at 1 in summary, which means that dots are
+## not removed
+summary.seqs(fasta=silva.seed_v119.pcr.align)
+#
+## look at quality, optional
+#fastq.info(file=stability.files)
+#summary.qual(qfile=HM782D_GACATAGT-TACGAGAC_L001_R1_filtered.qual)
+#summary.qual(qfile=HM782D_GACATAGT-TACGAGAC_L001_R2_filtered.qual)
+#summary.qual(qfile=HM783D_ACGCTACT-TACGAGAC_L001_R1_filtered.qual)
+#summary.qual(qfile=HM783D_ACGCTACT-TACGAGAC_L001_R2_filtered.qual)
+#
+## reverse read drops quality faster than forward for both samples
+#
+make.contigs(file=input.files)
+summary.seqs(fasta=current)
+screen.seqs(fasta=current, group=current, maxambig=0, maxlength=550,maxhomop=8)
+summary.seqs()
+unique.seqs(fasta=current)
+summary.seqs(fasta=current,name=current)
+count.seqs(name=current, group=current)
+summary.seqs(count=current)
+align.seqs(fasta=current, reference=silva.seed_v119.pcr.align)
+summary.seqs(fasta=current,count=current)
+## The coordinates above were obtained by calling quite after summary.seqs above
+## and looking at the summary. You can use  load.logfile(logfile=main.logfile) to
+## resume later with the last `current` values.
+screen.seqs(fasta=current, count=current, summary=current, start=46, end=10897, maxhomop=8)
+summary.seqs(fasta=current,count=current)
+filter.seqs(fasta=current,vertical=T, trump=.)
+unique.seqs(fasta=current,count=current)
+## SOP says 1 diff per 100 nt, and we have min 400 long contigs
+## the command below affects files in the same way as unique.seqs
+pre.cluster(fasta=current,count=current,diffs=4)
+## summary just in case
+summary.seqs(fasta=current,count=current)
+## In the SOP, notice that .align goes into the pre.cluster and comes
+## out as .fasta. It still has gaps in it inserted by the alignment,
+## so this is just renaming, not gap removal.
+#
+## ==Dropping singleton pre-clusters==
+## *This is a key scalability trick*
+## With the next set of commands, we separate current clusters into abundant and 
+## rare ones, and drop the rare ones. On noisy datasets, we expect that most of the
+## singletons after the aggressive preclustering step are sequences with errors.
+## They daramatically inflate the number of unique representatives that have to go
+## into the OTU clustering step downstream, and cause that step to run out of RAM
+## and/or time.
+## Depending on the size and quality of your data, you might even have to increase the
+## `cutoff` argument below to drop not just singltons but other small clusters as well.
+## Some experience of dropping post-preclustering singletons has been described in 
+## [doi: 10.4014/jmb.1409.09057]
+#
+## DOES NOT WORK: switch to temporary logfile so that the previous holds last `current` vars
+#set.logfile(name=split.abund.logfile)
+system(cp mothur.*.logfile checkpoint.logfile)
+## Split fasta and count into abund (total count > cutoff) and rare (total count <= cutoff)
+## partitions and generate accnos files for the IDs of unique sequences in each.
+## accnos files will always have fixed names rare.accnos and abund.accnos
+split.abund(fasta=current,count=current,accnos=true,cutoff=1)
+## restore `current` vars as they were before split.abund
+load.logfile(logfile=checkpoint.logfile)
+## DOES NOT WORK: switch back to appending to the main logfile
+#set.logfile(name=main.logfile,append=T)
+## Drop selected sequences from fasta and adjust count file
+remove.seqs(fasta=current,count=current,accnos=rare.accnos)
+## summary just in case
+summary.seqs(fasta=current,count=current)
+## ==End of Dropping singleton pre-clusters==
+#
+## Uncomment the line below to do self-reference unchime
+#chimera.uchime(fasta=current,count=current,dereplicate=t)
+## Sample observed log trace from uchime is included below
+## 02:30 4.7Mb  100.0% 939/2586 chimeras found (36.3%)
+## 06:12 6.9Mb  100.0% 2649/5201 chimeras found (50.9%)
+#
+## By default, we do reference-based uchime considering that dataset is tiny
+## and there is might not be sufficiently robust count values for unique sequences
+## for the self-reference uchime to work correctly (my assumption, not verified).
+## Reference-based uchime takes much longer on this dataset, and the result is
+## very similar to the one from self-reference uchime.
+## We use GOLD subset of Sylva alignment. Ideally, we should pcr.seqs it as well, I suppose.
+chimera.uchime(fasta=current,reference=silva.gold.align,dereplicate=t)
+## from count, chimeras were removed during chimera.uchime if self-reference was used; 
+## now removing from fasta
+remove.seqs(fasta=current, accnos=current, count=current)
+summary.seqs(fasta=current,count=current)
+## As per the SOP, classify againts pds trainset to detect non-bacterial sequences for removal (but see comment below).
+classify.seqs(fasta=current, count=current, reference=trainset10_082014.pds.fasta, taxonomy=trainset10_082014.pds.tax, cutoff=80)
+## For samples with BEI controls only, we do not want to remove any lineage because if we find any taxa from a list below,
+## it is a sign that something went wrong. You should uncomment two lines below for non-benchmark runs.
+#remove.lineage(fasta=current, count=current, taxonomy=current, taxon=Chloroplast-Mitochondria-unknown-Archaea-Eukaryota)
+#summary.seqs(fasta=current, count=current)
+#
+## HMP_MOCK.v35.fasta is only V3-V5 region - you would have to prepare your own cutout from the full-length BEI
+## reference if interested in estimating the per-base error rate in annotated sequences when using BEI controls
+#seq.error(fasta=current,count=current,reference=HMP_MOCK.v35.fasta, aligned=F)
+#
+## There are many variants how the combination of dist.seqs and cluster or cluster.split can be executed for
+## optimal speed and lower memory consumption. Below we let cluster.split to build distance matrix on the fly.
+## Splits are done based on taxonomic classification at an order level. For very uneven communities, that might not
+## buy you much.
+#dist.seqs(fasta=current, cutoff=0.20)
+##According to Vishal, cluster.split does not take advantage of the cutoff
+cluster.split(fasta=current, count=current, taxonomy=current, splitmethod=classify, taxlevel=4, cutoff=0.15)
+make.shared(list=current, count=current, label=0.03)
+## We build taxonomic abundance count matrix that contains counts of sequences in each cell (`basis=sequence`).
+## You can also instead run the command wit `basis=otu` to get counts of OTUs in eac taxonomic bin (the
+## file names will be the same as with `basis=sequence`, so you would have to use system(mv ...) if you want to
+## keep both versions.
+## Note however, that it is more flexible to load shared file and OTU taxonomy file in some external application
+## (e.g. R or Python) and join-aggregate them where into taxonomic abundace because in that case you can filter out
+## rare (likely noise) OTUs before aggregating counts. Maybe there is a Mothur command as well for doing this?
+classify.otu(list=current, count=current, taxonomy=current, label=0.03, basis=sequence)
+#classify.otu(list=current, count=current, taxonomy=current, label=0.03, basis=otu)
+## If your dataset is hopelessly huge in terms of the number of unique sequences for clustering OTUs, you can
+## comment out the OTU clustering+make.shared above and uncomment phylotype+make.shared pair below. It is not
+## clear to me what value it creates on top of already made taxonomic classification file that it uses as input.
+#phylotype(taxonomy=current)
+#make.shared(list=current, count=current, label=1)
+#classify.otu(list=current, count=current, taxonomy=current, label=1)
+## Prevent from having multiple mothur.*.logfile in the same directory
+system(mv mothur.*.logfile finished.logfile)
