@@ -65,29 +65,47 @@ set.current(processors=4)
 #set.dir(tempdefault=/home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all)
 ## We instead copy the DBs into current dir and rename them to have stable names in the script below:
 ## _EDIT_ paths of the original reference files
-system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.seed_v119.align ref.align)
-system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.gold.align ref_chimera.align)
+#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.seed_v119.align ref.align)
+#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.gold.align ref_chimera.align)
 ## As per the SOP, we use pds trainset to detect non-bacterial sequences for removal
-system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.fasta rdp.fasta)
-system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.tax rdp.tax)
+#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.fasta rdp.fasta)
+#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.tax rdp.tax)
 
-## _EDIT_ start and end coords for your region and current version of reference alignment.
-## The current coords are for V13 and specifc DB version.
-## To figure out the coords, you can comment out the line below, copy entire
-## ref.align to ref.pcr.align, run this script till the
-## alignment stage, edit the coordinates below based on the summary (see SOP), and run again.
-## Or, you can automate that process by using other options to pcr.seqs() such as `oligos`.
-pcr.seqs(fasta=ref.align, start=1000, end=12400, keepdots=F)
-## loooks like a bug in pcr.seqs - no sequence starts at 1 in summary, which means that dots are
-## not removed
-summary.seqs(fasta=ref.pcr.align)
+## _EDIT_ start and end coordinates below for your primers and the current version of reference alignment.
+## The current coords in the command below are for V13 and specifc DB version.
+## To figure out the coords, you can comment out the pcr.seq() line below, and uncomment all lines till
+## quit() including which are currently commented out with a single #. Get the alignment coordinates from the
+## summary report in standard output, extend outward by 50 bp each, enter into the pcr.seqs() command above,
+## comment out commands below till quit() including, and run this script again.
+## Alternatively, uncomment lines below that use original full length reference alignment and get the coords from
+## summary generated after align.seqs().
+#
+##V13
+#pcr.seqs(fasta=ref.align, start=1000, end=13900, keepdots=F)
+##V4
+pcr.seqs(fasta=ref.align, start=10307, end=25497, keepdots=F)
+#system(cp ref.align ref.pcr.align)
+#set.current(fasta=ref.pcr.align)
+## Steps to figure out the start-end coordinates for pcr.seqs() above:
+## 1. We use oligos file to cut a full length reference sequence that is expected to 
+## be matched by primers in the oligos file (in this case we used E.coli sequence). Note that
+## doing this with the reference alignment directly somehow eliminated all sequences in Mothur v.1.34.
+#pcr.seqs(fasta=pcr_target.fasta,oligos=input.oligos,keepprimer=T)
+#summary.seqs(fasta=current)
+## 2. Align the pre-cut sequence to the reference alignment
+#align.seqs(fasta=current,reference=ref.align)
+#summary.seqs(fasta=current)
+#quit()
+## Based on benchmarking, you would need to take the pre-cut target alignment start-end and
+## extend outwards by 50 bp in order to cut the reference alignment for downstream use. If not for this,
+## you could automate everything by also uncommenting the command below.
+## 3. Use the aligned pre-cut sequence to cut the reference alignment
+#pcr.seqs(fasta=ref.align,ecoli=pcr_target.pcr.align,keepdots=F)
+summary.seqs(fasta=current)
 #
 ## look at quality, optional
-#fastq.info(file=stability.files)
-#summary.qual(qfile=HM782D_GACATAGT-TACGAGAC_L001_R1_filtered.qual)
-#summary.qual(qfile=HM782D_GACATAGT-TACGAGAC_L001_R2_filtered.qual)
-#summary.qual(qfile=HM783D_ACGCTACT-TACGAGAC_L001_R1_filtered.qual)
-#summary.qual(qfile=HM783D_ACGCTACT-TACGAGAC_L001_R2_filtered.qual)
+fastq.info(file=input.files)
+summary.qual(qfile=current)
 #
 ## We can see that the reverse MiSeq read drops in quality faster than forward.
 #
@@ -95,7 +113,7 @@ summary.seqs(fasta=ref.pcr.align)
 make.contigs(file=input.files)
 summary.seqs(fasta=current)
 ## _EDIT_ you might want to edit maxlength after looking at the summary
-screen.seqs(fasta=current, group=current, maxambig=0, maxlength=550,maxhomop=8)
+screen.seqs(fasta=current, group=current, maxambig=0, minlength=100, maxlength=650,maxhomop=8)
 summary.seqs()
 unique.seqs(fasta=current)
 summary.seqs(fasta=current,name=current)
@@ -103,16 +121,33 @@ count.seqs(name=current, group=current)
 summary.seqs(count=current)
 align.seqs(fasta=current, reference=ref.pcr.align)
 summary.seqs(fasta=current,count=current)
-## _EDIT_ look at the summary output and edit `start` and `end` coordinates below (see SOP)
-screen.seqs(fasta=current, count=current, summary=current, start=46, end=10897, maxhomop=8)
+#quit()
+## minlength cutoff is used to catch a possible data entry error when some samples were actually
+## done with primers targeting different region. Because we pcr.seqs() the reference alignment with
+## the expected primers, we should get very short or zero length alignments for those samples.
+## Note that Mothur computes minlength on the de-gapped sequences. Note that start-end combination will
+## leave only sequences that completely cover that range. Quoting screen.seqs() manual:
+## ```
+## optimize=start-end-minlength, would remove any sequence that starts after the position that 90% of 
+## the sequences do, or ends before the position that 90% of the sequences do, or whose length is 
+## shorter than 90% of the sequences
+## ```
+## In other words, higher values of `criteria` are more permissive (but criteria=100 results in an error eliminating
+## all sequences).
+screen.seqs(fasta=current, count=current, summary=current, optimize=start-end, criteria=90, minlength=100, maxhomop=8)
 summary.seqs(fasta=current,count=current)
+##trump=. removes all columns that have even a single `.`
 filter.seqs(fasta=current,vertical=T, trump=.)
 unique.seqs(fasta=current,count=current)
 ## _EDIT_ (maybe). Preclustering. SOP says allowing for 1 diff per 100 nt is appropriate, and we have 
 ## min 400 long contigs in the current MiSeq V13 runs. You might want to be less aggressive with `diffs`
 ## parameter if your input is full-overlap V4. 
 ## Note: the command below affects files in the same ways as unique.seqs
-pre.cluster(fasta=current,count=current,diffs=4)
+#
+##V13
+#pre.cluster(fasta=current,count=current,diffs=4)
+##V4
+pre.cluster(fasta=current,count=current,diffs=3)
 ## summary just in case
 summary.seqs(fasta=current,count=current)
 ## Note: In the SOP, notice that .align goes into the pre.cluster and comes
