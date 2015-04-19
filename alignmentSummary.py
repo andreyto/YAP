@@ -105,14 +105,20 @@ class   FastaParser:
 ##      Functions
 ##
 def qsub(num):
-    batches.append(num)
-    ## we use YAP_wrapper to correctly source the environment
-    command = "qsub -P %s -b y -N tmp.%s.in -cwd -M %s -m a \"%s %spython %s -i tmp.%s.in -o tmp.%s.out -s -p REFSEQ \"" % (options.projectid, num,options.mailaddress,os.environ["YAP_WRAPPER"],options.binpath, sys.argv[0], num, num   )
     
-    #command = "qsub -P %s -N tmp.%s.in -cwd -l \"fast\" -M sszpakow@jcvi.org -m a \"/home/sszpakow/bin/python %s -i tmp.%s.in -o tmp.%s.out -s -p REFSEQ \"" % (options.projectid, num, sys.argv[0], num, num   )
-    #      qsub -P 810013 -N tmp.2.in -cwd -l "fast" -M sszpakow@jcvi.org -m a "/home/sszpakow/bin/python /home/sszpakow/scripts/summarizeAlignment.py -i tmp.2.in -o tmp.2.out -s -p REFSEQ "
-    #print shlex.split(command)
-    p = Popen(shlex.split(command), stdout=PIPE)    
+    batches.append(num)
+    
+    ## we use YAP_wrapper to correctly source the environment
+    cmd = "{} {}python {} -i tmp.{}.in -o tmp.{}.out -s -p REFSEQ ".\
+            format(os.environ["YAP_WRAPPER"],options.binpath, sys.argv[0], num, num)
+    
+    if not options.dummy_grid_tasks:
+        command = "qsub -P %s -b y -N tmp.%s.in -cwd -M %s -m a \"%s\"" % \
+            (options.projectid, num,options.mailaddress,cmd)
+    else:
+        command = cmd
+    
+    p = check_call(shlex.split(command))    
     
     print command
     
@@ -149,6 +155,9 @@ parser.add_option("-i", "--input", dest="infilename",
 parser.add_option("-o", "--output", dest="outfilename",
                   help="NAME of an output file", metavar="NAME")
 
+parser.add_option("--output-trim", dest="output_trim",
+                  help="NAME of an output file for trimming coords", metavar="NAME")
+
 parser.add_option("-t", "--tmpsize", type="int", dest="size",
                   help="N fasta sequences will be put in each temporary file [default: %default]", metavar="N", default=10000)
 
@@ -167,6 +176,9 @@ parser.add_option("-x", "--exepath", dest="binpath", default="",
                   
 parser.add_option("--debug-grid-tasks", dest="debug_grid_tasks", action="store_true", default=False,
                   help="Debug grid tasks")                
+
+parser.add_option("--dummy-grid-tasks", dest="dummy_grid_tasks", action = "store_true", default=False,
+                 help="Use dummy grid tasks that run tasks inside the current process in a blocking subprocess (for debugging)\n[%default]")
 
 (options, args) = parser.parse_args()
 
@@ -338,8 +350,10 @@ if options.master:
     #   if len(p)>adjustment:
     #       adjustment = len(p)
     
-    print primers   
-    print "start\t%s\tend\t%s\tpeak\t%s\tthresh\t%.3f" % (coord1, coord2, peak, thresh)
+    with open(options.output_trim,"w") as out:
+        out.write("\n".join(primers))
+        out.write("\n")
+        out.write("start\t%s\tend\t%s\tpeak\t%s\tthresh\t%.3f" % (coord1, coord2, peak, thresh))
     
     
     
