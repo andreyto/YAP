@@ -11,8 +11,10 @@
 
 import YAPGlobals
 import sys, tempfile, shlex, glob, os, stat, hashlib, time, datetime, re, curses
+import threading
 from threading import *
 import dummy_threading
+import subprocess
 from subprocess import *
 from MothurCommandInfoWrapper import *
 from collections import defaultdict
@@ -53,9 +55,38 @@ def pseudo_shuffle(strings,skip=0):
 ##      Classes
 ##
 
-class   ReportingThread(Thread):
+
+class StoppableThread(threading.Thread):
+    """Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition."""
+
     def __init__(self):
-        Thread.__init__(self)
+        super(StoppableThread, self).__init__()
+        self._stop = threading.Event()
+
+    def stop(self):
+        self._stop.set()
+
+    def stopped(self):
+        return self._stop.isSet()
+
+class StoppableDummyThread(dummy_threading.Thread):
+    """Dummy Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition."""
+
+    def __init__(self):
+        super(StoppableThread, self).__init__()
+        self._stop = dummy_threading.Event()
+
+    def stop(self):
+        self._stop.set()
+
+    def stopped(self):
+        return self._stop.isSet()
+
+class   ReportingThread(StoppableThread):
+    def __init__(self):
+        super(ReportingThread, self).__init__()
 
     def run(self):
         #attempting to catch threads dying
@@ -68,9 +99,9 @@ class   ReportingThread(Thread):
             traceback.print_exc()
             raise
 
-class   ReportingDummyThread(dummy_threading.Thread):
+class   ReportingDummyThread(StoppableDummyThread):
     def __init__(self):
-        dummy_threading.Thread.__init__(self)
+        super(ReportingDummyThread, self).__init__()
 
     def run(self):
         #attempting to catch threads dying
@@ -86,7 +117,7 @@ class   ReportingDummyThread(dummy_threading.Thread):
 
 class   BufferedOutputHandler(ReportingThread):
     def __init__(self, usecurses=False):
-        ReportingThread.__init__(self)
+        super(BufferedOutputHandler, self).__init__()
         self.shutdown=False
         self.cache = deque()
         self.registered=0
@@ -142,6 +173,8 @@ class   BufferedOutputHandler(ReportingThread):
         while YAPGlobals.step_dummy_thread or (activeCount()>3 or self.registered>0 or len(self.cache) > 0):
             self.flush()
             time.sleep(1)
+            if self.stopped():
+                break
         
         self.flush()
         endtime = time.time()
@@ -379,6 +412,9 @@ class   TaskQueueStatus(ReportingThread):
                 BOH.toPrint("-----","BATCH","{}".format(self))
             
             time.sleep(self.update)
+            
+            if self.stopped():
+                break
         
         BOH.toPrint("-----","BATCH","{}\nGrid Offline.".format(self))
         
@@ -794,12 +830,9 @@ class   FastaParser:
     def __str__():
         return ("reading file: %s" %self.filename)  
 
-    #################################################
-    ### Iterator over input file.
-    ### every line is converted into a dictionary with variables referred to by their 
-    ### header name
 class GeneralPurposeParser:
-    def __init__(self, file, skip=0, sep="\t"):
+    def __init__(self, file, skip=0, sep="\t", skip_empty=True):
+        self.skip_empty = skip_empty
         self.filename = file
         self.fp = open(self.filename, "rU") 
         self.sep = sep
@@ -814,12 +847,13 @@ class GeneralPurposeParser:
         return (self)
     
     def next(self):
-        otpt = dict()
         for currline in self.fp:
-            currline = currline.strip().split(self.sep)
-            self.currline = currline
+            currline = currline.strip()
             self.linecounter = self.linecounter + 1
-            return(currline)            
+            if not self.skip_empty or currline:
+                currline = currline.split(self.sep)
+                self.currline = currline
+                return(currline)            
         raise StopIteration
                     
     def __str__(self):
@@ -846,8 +880,8 @@ class   DefaultStep(DefaultStepBase):
         self.random = uniform(0, 10000)
         self.name = ("%s[%s]" % (self.name, self.random))
 
-        #### hash of the current step-path (hash digest of previous steps + current inputs + arguments?)
-        self.workpathid = ""
+        #### hash of the current step-path (hash digest of previous steps + current inputs + arguments + control)
+        self.workpathid = None
         #### path where the step stores its files
         self.stepdir = ""
                     
@@ -863,6 +897,9 @@ class   DefaultStep(DefaultStepBase):
         
         #### mapping arg  val for program's arguments
         self.arguments= dict()
+        
+        #### mapping arg  val for step's control parameters
+        self.control= dict()
         
         #### ID of the step...
         self.stepname = ""  
@@ -885,15 +922,18 @@ class   DefaultStep(DefaultStepBase):
         for k,v in x.items():
             for elem in v:
                 self.inputs[k].add(elem)
+    
     def setArguments(self, x):
         for k,v in x.items():
             if v=="":
                 v=" "
             self.arguments[k] = v
-
-    def setMasks(self,mask_types):
-        for mask_type in mask_types:
-            self.setMask(mask_type)
+    
+    def setControl(self, x):
+        for k,v in x.items():
+            if v=="":
+                v=" "
+            self.control[k] = v
 
     def setPrevious(self, x):
         if isinstance(x,DefaultStep):
@@ -928,9 +968,15 @@ class   DefaultStep(DefaultStepBase):
     
     def do_run(self):
         try:
-            self.init()
+            try:
+                self.init()
+            except:
+                traceback.print_exc()
+                self.message(traceback.format_exc())
+                self.failed = True
+
             if self.failed:
-                #self.message("Error detected... ")
+                ##deregister never throws
                 BOH.deregister()
                 self.completed=True
             elif not self.isDone():
@@ -939,8 +985,8 @@ class   DefaultStep(DefaultStepBase):
                     self.finalize()
                 except:
                     traceback.print_exc()
-                    self.message("...")
                     self.message(traceback.format_exc())
+                    ##deregister never throws
                     BOH.deregister()
                     self.completed=True
                     self.failed=True
@@ -952,7 +998,7 @@ class   DefaultStep(DefaultStepBase):
         finally:
             DefaultStep.semaphore.release()
         
-    def performStep():
+    def performStep(self):
         self.message("in a step...")
                 
     def init(self):
@@ -964,7 +1010,7 @@ class   DefaultStep(DefaultStepBase):
                 #self.message( "waiting" )
                 ##even small sleep should be OK - because
                 ##of GIL, total CPU spent spinning will not be higher than one full core
-                time.sleep(0.1)
+                time.sleep(0.01)
             if k.hasFailed():
                 self.failed=True
             redo=redo or (not k.isDonePreviously()) 
@@ -993,7 +1039,7 @@ class   DefaultStep(DefaultStepBase):
         tmp.append(self.stepname)
         if self.previous!=None:
             for k in self.previous:
-                while k.getWorkPathId()==-1:
+                while not k.getWorkPathId():
                     time.wait(0.1)
                 tmp.extend([k.getWorkPathId()])
             
@@ -1003,10 +1049,12 @@ class   DefaultStep(DefaultStepBase):
         for k,v in self.arguments.items():
             tmp.extend(["%s=%s" % (k, v) ] )
                 
+        for k,v in self.control.items():
+            tmp.extend(["%s=%s" % (k, v) ] )
+                
         tmp.sort()  
         tmp = "\n".join(tmp)
         
-        #workpathid = hashlib.sha224(tmp).hexdigest()[0:5]
         workpathid = hashlib.md5(tmp).hexdigest()
         return (workpathid)
                 
@@ -1014,6 +1062,7 @@ class   DefaultStep(DefaultStepBase):
         return (self.workpathid)
                 
     def prepareDir(self, redo=False):
+        assert self.workpathid
         ### make step's directory
         self.stepdir = "Step_%s_%s" % (self.stepname, self.workpathid)
         
@@ -1065,6 +1114,7 @@ class   DefaultStep(DefaultStepBase):
         BOH.deregister()
                 
     def makeManifest(self):
+        assert self.workpathid
         pool_open_files.acquire()
         try:
             with open("%s/%s.manifest" % \
@@ -1074,6 +1124,8 @@ class   DefaultStep(DefaultStepBase):
                         m.write("input\t%s\t%s\n" % (type, ",".join(files)) )
                 for arg, val in self.arguments.items():
                     m.write("argument\t%s\t%s\n" % (arg, val ) )
+                for arg, val in self.control.items():
+                    m.write("control\t%s\t%s\n" % (arg, val ) )
                 for type, files in self.outputs.items():
                     if len(files)>0:
                         m.write("output\t%s\t%s\n" % (type, ",".join(files)) )
@@ -1090,6 +1142,9 @@ class   DefaultStep(DefaultStepBase):
         
         elif "scrap" in filename: #scrap.contigs.fasta comes from make.contigs
             return "scrap"
+        
+        elif extension == "refalign":
+            return "refalign"
             
         elif preextension == "align" and extension == "report":
             return "alignreport"
@@ -1143,6 +1198,7 @@ class   DefaultStep(DefaultStepBase):
             return extension
         
     def categorizeAndTagOutputs(self):
+        assert self.workpathid
         inputs = [x.split("/")[-1] for x in unlist( self.inputs.values()) ]
         for file in glob.glob("%s/*" % self.stepdir):
             file = file.split("/")[-1]
@@ -1198,15 +1254,18 @@ class   DefaultStep(DefaultStepBase):
             if self.isVar(file):
                 toreturn.append(file[5:])
             else:   
-                tmp = file.strip().split("/")[-1] 
+                targ = os.path.basename(file)
+                targ_path = os.path.join(self.stepdir,targ)
+                if os.path.islink(targ_path):
+                    os.remove(targ_path)
+                elif os.path.exists(targ_path):
+                    shutil.rmtree(targ_path)
                 if (ln):
-                    command = "cp -s %s %s" % (file, tmp )
+                    command = "cp -s %s %s" % (file, targ )
                 else:
-                    command = "cp %s %s" % (file, tmp )
-                p = Popen(shlex.split(command), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True )    
-                out,err = p.communicate()
-                
-                toreturn.append(tmp)        
+                    command = "cp %s %s" % (file, targ )
+                check_call(shlex.split(command), cwd=self.stepdir, close_fds=True )    
+                toreturn.append(targ)        
         #unique 
         toreturn = set(toreturn)
         return list(toreturn)
@@ -1214,30 +1273,55 @@ class   DefaultStep(DefaultStepBase):
     def isVar(self,x):
         return x.startswith("[var]")
     
-    def isMask(self,x):
-        return x.startswith("[mask]")
+
+    def setOutputMaskInclude(self,patt):
+        """Set output inclusion pattern for lookups by upstream steps.
+        patt must be Python regex. type1|type2|type3 will match either one of three types.
+        """
+        self.control["output_mask_include"] = patt
+    
+    def setOutputMaskExclude(self,patt):
+        """Set output exclusion pattern for lookups by upstream steps.
+        patt must be Python regex. type1|type2|type3 will match either one of three types.
+        """
+        self.control["output_mask_exclude"] = patt
+
+    def isMasked(self,key):
+        """Return True if control parameters mask this data type from lookups by downstream steps.
+        include pattern has preference over exclude pattern"""
+        incl = self.control.get("output_mask_include",None)
+        if incl is not None:
+            if re.match("^"+incl+"$",key):
+                return False
+        excl = self.control.get("output_mask_exclude",None)
+        if excl is not None:
+            if re.match("^"+excl+"$",key):
+                return True
+        return False
+
     
     def getOutputs(self, arg):
-        if self.outputs.has_key(arg):
-            otpt = list()
-            for x in unlist(self.outputs[arg]):
-                if self.isVar(x):
-                    otpt.append(x)
-                elif self.isMask(x):
-                    ## masked type is in outputs, so no recursive search, but nothing
-                    ## is returned either - so it is ignored 
-                    pass 
-                else:
-                    otpt.append("../%s/%s" % (self.stepdir, x))
-            return otpt
-            
-        elif self.previous!=None:
-            otpt = list()
-            for k in self.previous:
-                otpt.extend(k.getOutputs(arg))
-            return otpt         
-        else:
-            return list()
+        
+        otpt = list()
+        
+        is_masked = self.isMasked(arg)
+
+        if not (self.isDone() and is_masked):
+            ## when step itself is executing, it is allowed
+            ## to ask upstream for types that it masks
+        
+            if self.outputs.has_key(arg):
+                for x in unlist(self.outputs[arg]):
+                    if self.isVar(x):
+                        otpt.append(x)
+                    else:
+                        otpt.append("../%s/%s" % (self.stepdir, x))
+                
+            elif self.previous!=None:
+                    for k in self.previous:
+                        otpt.extend(k.getOutputs(arg))
+        
+        return otpt
         
     def getOriginal(self, arg):
         if self.previous == None:
@@ -1253,6 +1337,7 @@ class   DefaultStep(DefaultStepBase):
                 return current      
             
     def parseManifest(self):
+        assert self.workpathid
         manifest_file = "%s/%s.manifest" % (self.stepdir, self.workpathid)
         if not os.path.exists(manifest_file):
             return False
@@ -1279,6 +1364,11 @@ class   DefaultStep(DefaultStepBase):
                     self.arguments[line[1]] = " "
                 else:
                     self.arguments[line[1]]=line[2]
+            elif line[0] == "control":
+                if len(line)==2:
+                    self.control[line[1]] = " "
+                else:
+                    self.control[line[1]]=line[2]
         return True
                 
     def message(self, text):
@@ -1307,8 +1397,6 @@ class   DefaultStep(DefaultStepBase):
     def setOutputValue(self, arg, val):
         self.outputs[arg] = ["[var]%s" % (val)] 
                 
-    def setMask(self, mask_type):
-        self.outputs[mask_type] = ["[mask]"] 
                 
     def __str__(self):
         otpt = "%s\t%s" % (self.stepname, self.name)
@@ -1341,11 +1429,9 @@ class   FileImport(DefaultStep):
                         k = "cp %s %s.%s" % (file, newname, type)
                     else:
                         file = file[0]
-                        tmp = file.strip().split("/")[-1]
-                        k ="cp %s imported.%s"  % (file, tmp)
-                    p = Popen(shlex.split(k), stdout=PIPE, stderr=PIPE, cwd=self.stepdir, close_fds=True)
-                    out,err = p.communicate()
+                        k ="cp %s imported.%s.%s"  % (file, os.path.basename(file), type)
                     self.message(k)
+                    subprocess.call(shlex.split(k), cwd=self.stepdir, close_fds=True)
                 finally:
                     pool_open_files.release()
                 
@@ -1417,7 +1503,107 @@ class   SFFInfoStep(DefaultStep):
             
         for s in steps:
             s.wait()
+
+class   WriteOligosStep(DefaultStep):
     
+    def __init__(self, ARGS, PREV):
+        DefaultStep.__init__(self)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("WriteOligos")
+        self.start()
+        
+    def performStep(self):
+        out_name = os.path.join(self.stepdir,"seq.oligos")
+        with open(out_name,"w") as out:
+            out.write("primer {} {}\n".format(
+                self.arguments["forward_primer"],
+                self.arguments["reverse_primer"])
+                )
+    
+class   WriteFilesStep(DefaultStep):
+    """Dump values of arguments dict with file names provided by the keys.
+    The use case is reasonably small values, such as writing accnos file
+    for a fixed set of sequence names"""
+    
+    def __init__(self, ARGS, PREV):
+        DefaultStep.__init__(self)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("WriteFiles")
+        self.start()
+        
+    def performStep(self):
+        for file_name, file_content in self.arguments.items():
+            out_name = os.path.join(self.stepdir,file_name)
+            with open(out_name,"w") as out:
+                out.write(file_content)
+    
+class   AlignmentReportTemplateRangeStep(DefaultStep):  
+    def __init__(self, ARGS, PREV):
+        DefaultStep.__init__(self)
+        #self.setInputs(INS)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("AlignmentReportTemplateRange")
+        #self.nodeCPUs=nodeCPUs
+        self.start()
+        
+                
+    def performStep(self):
+        import csv
+        template_name = self.arguments.get("template_name",None)
+        f = self.find("alignreport",require=True)[0]
+        start = 10**10
+        end = -1
+        template_length = 0
+        template_found = False
+        with open(f,"r") as inp_file:
+            inp = csv.DictReader(inp_file,delimiter="\t")
+            for rec in inp:
+                if template_name is None:
+                    template_name = rec["TemplateName"]
+                if template_name == rec["TemplateName"]:
+                    start = min(start,int(rec["TemplateStart"]))
+                    end = max(end,int(rec["TemplateEnd"]))
+                    template_length = rec["TemplateLength"]
+                    template_found = True
+
+        assert template_found
+        pad = self.arguments.get("template_range_pad",0)
+        self.setOutputValue("template_range_start",max(1,start-pad))
+        self.setOutputValue("template_range_end",min(template_length,end+pad))
+
+class   PcrReferenceAlignmentStep(DefaultStep):
+    def __init__(self, ARGS, PREV):      
+        DefaultStep.__init__(self)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("PcrReferenceAlignment")
+        #self.nodeCPUs=nodeCPUs
+        self.start()
+        
+    def performStep(self):
+        call_args = dict(globals())
+        call_args.update(self.arguments)
+        call_args["reference_ali"] = self.find(self.arguments["align_type"],require=True)[0]
+        call_args["pcr_target_fasta"] = self.find("fasta",require=True)[0]
+        call_args["mothurpath"] = mothurpath
+
+        k = """{binpath}python {scriptspath}/scripts.py pcr-reference-alignment \
+                --pcr-target-padding {pcr_target_padding} \
+                {mothurpath}mothur \
+                {pcr_target_fasta} \
+                {pcr_target_idseq} \
+                {primer_forward} \
+                {primer_reverse} \
+                {reference_ali}""".format(**call_args)
+                        
+        self.message(k) 
+        task = GridTask(template="pick", name=self.stepname, command=k, cpu=1,  cwd = self.stepdir)
+        task.wait() 
+
+
 class   MothurStep(DefaultStep):
     def __init__(self, NM, nodeCPUs, INS, ARGS, PREV):
         DefaultStep.__init__(self)
@@ -1429,6 +1615,7 @@ class   MothurStep(DefaultStep):
         self.start()
     
     def makeCall(self):
+        skip_step = False
         FORCE = self.getInputValue("force")
         x = MOTHUR.getCommandInfo(self.stepname)
         #self.message(self.inputs)
@@ -1444,6 +1631,42 @@ class   MothurStep(DefaultStep):
             
         mothurargs = list()
         
+        for arg, val in self.arguments.items():
+
+            if arg not in ("force","force_exclude"):
+        
+                if x.isAnArgument(arg):
+                    mothurargs.append("%s=%s" % (arg, val))
+                elif arg in ("find","find_req","find_or_skip_step"):
+                    for a in val.strip().split(","):
+                        self.message(a)
+                        kv = a.strip().split("=",1)
+                        if len(kv) > 1:
+                            k,v = kv
+                        else:
+                            k = kv[0]
+                            v = k
+                        v = v.strip()
+                        k = k.strip()
+                        valstoinsert = self.find(v)
+                        self.message(valstoinsert)
+                        if valstoinsert:
+                            TYPES = [ t for t in TYPES if t != k ]
+                        valstoinsert = [ val_el.strip() for val_el in valstoinsert if val_el.strip() ]
+                        if valstoinsert:
+                            mothurargs.append("%s=%s" % (k, "-".join(valstoinsert)))
+                        else:
+                            if arg == "find_req":
+                                self.message("Required argument '{}' not found!".format(v))
+                                raise ValueError(v)
+                            elif arg == "find_or_skip_step":
+                                self.message("Argument '{}' was marked for skipping Mothur step if not found; skipping step.".format(v))
+                                skip_step = True
+                            else:
+                                self.message("Skipping Mothur argument insertion '{}' - not found".format(v))
+                else:
+                    self.message("skipping '%s', as it is not an argument for %s" % (arg, self.stepname))
+        
         for TYPE in TYPES:
             #### on occasion, mothur overwrites the original file - namely names file
             #### FALSE creates a copy
@@ -1458,37 +1681,10 @@ class   MothurStep(DefaultStep):
             else:
                 if x.isRequired(TYPE):
                     self.message("Required argument '%s' not found!" % (TYPE))  
-                    raise Exception 
+                    raise ValueError(TYPE)
                 else:
                     self.message("Optional argument '%s' not found, skipping" % (TYPE)) 
         
-        for arg, val in self.arguments.items():
-
-            if arg not in ("force","force_exclude"):
-        
-                if x.isAnArgument(arg):
-                    mothurargs.append("%s=%s" % (arg, val))
-                elif arg in ("find","find_req"):
-                    for a in val.strip().split(","):
-                        self.message(a)
-                        kv = a.strip().split("=",1)
-                        if len(kv) > 1:
-                            k,v = kv
-                        else:
-                            k = kv[0]
-                            v = k
-                        valstoinsert = self.find(v.strip())
-                        self.message(valstoinsert)
-                        if len(valstoinsert)>0:
-                            mothurargs.append("%s=%s" % (k.strip(), "-".join(valstoinsert)))
-                        else:
-                            if arg == "find_req":
-                                self.message("Required argument '{}' not found!".format(v))
-                                raise Exception 
-                            else:
-                                self.message("skipping '%s' - not found" % (v))
-                else:
-                    self.message("skipping '%s', as it is not an argument for %s" % (arg, self.stepname))
     
         ### method is parallelizable,   
         if x.isAnArgument("processors") and "processors" not in self.arguments.keys():
@@ -1500,18 +1696,22 @@ class   MothurStep(DefaultStep):
         if self.stepname in ("clearcut", "align.seq"):
             himemflag=True
             self.message("Needs lots of memory")
-        
-        command = "%s(%s)" % (self.stepname, ", ".join(mothurargs))
+
+        if skip_step:
+            command = None
+        else:
+            command = "%s(%s)" % (self.stepname, ", ".join(mothurargs))
         
         return (command, x.isAnArgument("processors"), himemflag)
     
     def performStep(self):
-        call, parallel, himem = self.makeCall() 
-        k = "%smothur \"#%s\"" % (mothurpath, call)
         
-        if self.stepname =="remove.groups" and k.find("groups=)")>-1:
-            self.message("no groups to remove.")
-        else:   
+        call, parallel, himem = self.makeCall() 
+
+        if call:
+
+            k = "%smothur \"#%s\"" % (mothurpath, call)
+            
             self.message(k)
             if (parallel and self.nodeCPUs>1):
                 #task = GridTask(template=defaulttemplate, name=self.stepname, command=k, cpu=self.nodeCPUs, dependson=list(), cwd = self.stepdir)
@@ -1524,7 +1724,10 @@ class   MothurStep(DefaultStep):
             
             task.wait()
             self.parseLogfile()
-                
+        
+        else:
+
+            self.message("Step was marked to be skipped, skipping")
         
     def parseLogfile(self):
         for f in glob.glob("%s/*.logfile" % (self.stepdir)):
@@ -1825,7 +2028,23 @@ class   FileType(DefaultStep):
                 tasks.append(task)
         for task in tasks:
             task.wait()
-            time.sleep(1)           
+            time.sleep(1)
+
+class FileTypeMaskInput(FileType):
+    """Type renamer class that will also mask its input types from dependant tasks.
+    This is an equivalent of 'move' command in this immutable workflow pattern."""
+    ##TODO: currently imposible to call the __init__ of parent Step classes because they
+    ##call threading.start() at the end of __init__(). Factor out the actual init into a do_init()
+    ##method that should be overaloaded and chain-called in children classes
+    def __init__(self, ARGS, PREV):
+        DefaultStep.__init__(self)
+        self.setArguments(ARGS)
+        self.setPrevious(PREV)
+        self.setName("FILE_type_mask_input")
+        excl = "|".join( (input for (input,output) in ARGS.items()) )
+        self.setOutputMaskExclude(excl)
+        self.start()
+
 
 class   MaskType(DefaultStep):
     """This masks a list of file types so that they are never found by downstream steps"""
@@ -1833,16 +2052,26 @@ class   MaskType(DefaultStep):
     def __init__(self, TYPES, PREV):     
         DefaultStep.__init__(self)
         #self.setInputs(INS)
-        ARGS = {"types":TYPES}
-        self.setArguments(ARGS)
+        excl = "|".join( TYPES.strip().split(",") )
+        self.setOutputMaskExclude(excl)
         self.setPrevious(PREV)
         self.setName("MASK_type")
         #self.nodeCPUs=nodeCPUs
-        self.start()
-        
-    def performStep(self):
-        self.setMasks(self.getInputValue("types").strip().split(","))
+        self.start()  
             
+class   MaskExceptType(DefaultStep):
+    """This masks all file types but the given ones so that they are never found by downstream steps"""
+
+    def __init__(self, TYPES, PREV):     
+        DefaultStep.__init__(self)
+        #self.setInputs(INS)
+        incl = "|".join( TYPES.strip().split(",") )
+        self.setOutputMaskInclude(incl)
+        self.setOutputMaskExclude(".*")
+        self.setPrevious(PREV)
+        self.setName("MASK_except_type")
+        #self.nodeCPUs=nodeCPUs
+        self.start()  
             
 class   CleanFasta(DefaultStep):
     def __init__(self, INS, PREV):      
@@ -1964,21 +2193,23 @@ class   AlignmentSummary(DefaultStep):
         th =  self.getInputValue("thresh")
         if th == None:
             th="0.1"    
-            
+        
+        outfile_trim = "{}.altrimcoords".format(f)
         self.message("summarizing an alignment in %s" % (f) )
-        k = "%spython %s/alignmentSummary.py -P %s -M %s -t 500 -p %s -i %s -o %s.alsum -T %s -x %s" % (binpath, scriptspath, self.project, self.mailaddress, ref, f,f, th, binpath)
+        k = "%spython %s/alignmentSummary.py -P %s -M %s -t 500 -p %s -i %s -o %s.alsum -T %s -x %s --output-trim %s" % (binpath, scriptspath, self.project, self.mailaddress, ref, f,f, th, binpath,outfile_trim)
         if YAPGlobals.debug_grid_tasks:
             k += " --debug-grid-tasks"
+        if YAPGlobals.dummy_grid_tasks:
+            k += " --dummy-grid-tasks"
         self.message(k)
         task = GridTask(template="pick", name=self.stepname, command=k, cwd = self.stepdir, debug=True)
         task.wait()     
         
-        for file in glob.glob("%s/*AlignmentSummary.o*"% (self.stepdir)):
-            x = loadLines(file)[-1].strip().split("\t")
-            self.message("Potential trimming coordinates: %s - %s [peak = %s] [thresh = %s]" % (x[1], x[3], x[5], x[7]) )
-            self.setOutputValue("trimstart", x[1])
-            self.setOutputValue("trimend", x[3])
-            self.setOutputValue("trimthresh", x[7])
+        x = loadLines(os.path.join(self.stepdir,outfile_trim))[-1].strip().split("\t")
+        self.message("Potential trimming coordinates: %s - %s [peak = %s] [thresh = %s]" % (x[1], x[3], x[5], x[7]) )
+        self.setOutputValue("trimstart", x[1])
+        self.setOutputValue("trimend", x[3])
+        self.setOutputValue("trimthresh", x[7])
         
         #self.failed = True
         
@@ -2034,7 +2265,7 @@ class   GroupRetriever(DefaultStep):
         #self.setInputs(INS)
         self.setArguments(ARGS)
         self.setPrevious(PREV)
-        self.setName("GroupCheck")
+        self.setName("GroupRetriever")
         self.start()
         
     def performStep(self):
@@ -2544,7 +2775,7 @@ def init(id, e, maxnodes = 250, update=0.1):
     MOTHUR = MothurCommandInfo(path=mothurpath)
     QS = TaskQueueStatus(update = update, maxnodes=maxnodes)
     
-    return (BOH)
+    return dict(BOH=BOH,QS=QS,MOTHUR=MOTHUR)
     
 def revComp(string):
     global transtab

@@ -754,7 +754,10 @@ else:
 validator = InfoValidator(options.fn_info)  
 _trimstart , _trimend, _region = validator.getTrimpoints()    
                                                               
-BOH = init(options.project, options.email)
+init_res = init(options.project, options.email)
+BOH = init_res["BOH"]
+QS = init_res["QS"]
+MOTHUR = init_res["MOTHUR"]
 BOH.toPrint("-----", "GLOBAL",  "We are in %s mode" % (options.mode)) 
 
 if options.dynamic or _region == "unknown":
@@ -817,6 +820,12 @@ else:
     
 OutputStep("7-SUPP_PLOTS", "tre,pdf,svg,tiff,r_nseqs,rarefaction,r_simpson,r_invsimpson,r_chao,r_shannon,r_shannoneven,r_coverage", supplementary)
     
+if YAPGlobals.step_dummy_thread:
+    BOH.stop()
+    QS.stop()
+
+BOH.join()
+QS.join()
     
 ###########################################################################    
 ##  
