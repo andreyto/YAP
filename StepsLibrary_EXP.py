@@ -1195,7 +1195,6 @@ class   FileSplit(DefaultStep):
                 tasks.append(task)
         for task in tasks:
             task.wait()
-            time.sleep(1)   
             
         ### rename the files
         for file in glob.glob("%s/*.split.*" % (self.stepdir)):
@@ -1314,7 +1313,6 @@ class   FileTypeTrim(DefaultStep):
                 tasks.append(task)
         for task in tasks:
             task.wait()
-            time.sleep(1)
 
 class   Flash (DefaultStep):
     def __init__(self, INS, ARGS, PREV):        
