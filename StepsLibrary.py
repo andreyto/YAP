@@ -395,6 +395,16 @@ class   TaskQueueStatus(ReportingThread):
         self.stats=dict()
         
         self.previous =""
+
+        ## All task submitters with wait for this condition,
+        ## that will be signalled in task.setCompleted method.
+        ## All waited tasks will get notified and check for their isCompleted status (that will be
+        ## serialized because lock has to be acquired by Condition.wait()).
+        ## The task that was set as completed will exit the wait loop.
+        ## A much more straightforward use of Event associated with every
+        ## Task would however consumed one handle per event object, probably
+        ## leading to thread resource errors that we have seen before.
+        self.any_task_completed = threading.Condition()
         
         self.start()
             
@@ -768,21 +778,24 @@ class GridTask():
         return "%s_%s_%s" % (id(self), self.cwd, self.inputcommand)
 
     def setCompleted(self):
-        self.completed=True
         try:
             if not self.debugflag:
                 os.remove(self.scriptfilepath)
         except OSError, error:
             print( "%s already gone" % self.scriptfilepath)
         QS.flagRemoval(self)
+        with QS.any_task_completed:
+            self.completed = True
+            QS.any_task_completed.notify_all()
 
     def isCompleted(self):
-        return (self.completed)
+        return self.completed
     
     def wait(self):
-        while not self.isCompleted():
-            time.sleep(0.1)
-                    
+        with QS.any_task_completed:
+            while not self.isCompleted():
+                QS.any_task_completed.wait()
+ 
 
     #################################################
     ### Iterator over input fasta file.
@@ -1006,11 +1019,9 @@ class   DefaultStep(DefaultStepBase):
         redo=False
         ### wait for previous steps to finish
         for k in self.previous:
-            while not k.isDone():
-                #self.message( "waiting" )
-                ##even small sleep should be OK - because
-                ##of GIL, total CPU spent spinning will not be higher than one full core
-                time.sleep(0.01)
+            k.join()
+            #while not k.isDone():
+            #    time.sleep(0.01)
             if k.hasFailed():
                 self.failed=True
             redo=redo or (not k.isDonePreviously()) 
@@ -1980,7 +1991,6 @@ class   FileMerger(DefaultStep):
             
         for task in tasks:
             task.wait()
-            time.sleep(0.1)
             
 class   FileSort(DefaultStep):
     def __init__(self, TYPES, PREV):
@@ -2004,7 +2014,6 @@ class   FileSort(DefaultStep):
                 tasks.append(task)
         for task in tasks:
             task.wait()
-            time.sleep(1)
                         
 class   FileType(DefaultStep):
     def __init__(self, ARGS, PREV):     
@@ -2028,7 +2037,6 @@ class   FileType(DefaultStep):
                 tasks.append(task)
         for task in tasks:
             task.wait()
-            time.sleep(1)
 
 class FileTypeMaskInput(FileType):
     """Type renamer class that will also mask its input types from dependant tasks.
@@ -2769,7 +2777,7 @@ def init(id, e, maxnodes = 250, update=0.1):
     
     __projectid__ = id
     __email__ = e
-    __admin__ = 'sszpakow@gmail.com'
+    __admin__ = 'rsanka@jcvi.org'
     
     BOH = BufferedOutputHandler()
     MOTHUR = MothurCommandInfo(path=mothurpath)
