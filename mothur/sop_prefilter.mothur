@@ -83,7 +83,7 @@ set.current(processors=4)
 ##V13
 #pcr.seqs(fasta=ref.align, start=1000, end=13900, keepdots=F)
 ##V4
-pcr.seqs(fasta=ref.align, start=10307, end=25497, keepdots=F)
+pcr.seqs(fasta=ref.align, start=10351, end=25497, keepdots=F)
 #system(cp ref.align ref.pcr.align)
 #set.current(fasta=ref.pcr.align)
 ## Steps to figure out the start-end coordinates for pcr.seqs() above:
@@ -111,6 +111,12 @@ summary.qual(qfile=current)
 #
 ## Merge paired end reads into contigs
 make.contigs(file=input.files)
+## need to trim the contigs - trim.seqs() command did not work for me for these V4 files where there
+## was still some sequence to the left of the forward primer. And make.contigs() does not tolerate the case
+## when only primers are provided - it also needs the barcodes.
+## I used the command below
+system(/home/atovtchi/work/YAP.deps/bin/python /home/atovtchi/work/YAP/PrimerClipper.py  -m 1  -f GTGCCAGCHGCYGCGGT  -r GGACTACNNGGGTWTCTAAT  -i input.trim.contigs.fasta)
+set.current(fasta=input.trim.contigs.noprimers.fasta)
 summary.seqs(fasta=current)
 ## _EDIT_ you might want to edit maxlength after looking at the summary
 screen.seqs(fasta=current, group=current, maxambig=0, minlength=100, maxlength=650,maxhomop=8)
@@ -147,7 +153,7 @@ unique.seqs(fasta=current,count=current)
 ##V13
 #pre.cluster(fasta=current,count=current,diffs=4)
 ##V4
-pre.cluster(fasta=current,count=current,diffs=3)
+pre.cluster(fasta=current,count=current,diffs=4)
 ## summary just in case
 summary.seqs(fasta=current,count=current)
 ## Note: In the SOP, notice that .align goes into the pre.cluster and comes
