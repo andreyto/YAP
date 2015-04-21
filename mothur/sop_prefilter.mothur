@@ -82,8 +82,8 @@ set.current(processors=4)
 #
 ##V13
 #pcr.seqs(fasta=ref.align, start=1000, end=13900, keepdots=F)
-##V4
-pcr.seqs(fasta=ref.align, start=10351, end=25497, keepdots=F)
+##V4 RUN10
+pcr.seqs(fasta=ref.align, start=13859, end=23444, keepdots=F)
 #system(cp ref.align ref.pcr.align)
 #set.current(fasta=ref.pcr.align)
 ## Steps to figure out the start-end coordinates for pcr.seqs() above:
@@ -127,6 +127,8 @@ count.seqs(name=current, group=current)
 summary.seqs(count=current)
 align.seqs(fasta=current, reference=ref.pcr.align)
 summary.seqs(fasta=current,count=current)
+##You can uncomment the line below if you are running alignment against the full length
+##reference alignment in order to find the start-end coords for pcr.seqs() command.
 #quit()
 ## minlength cutoff is used to catch a possible data entry error when some samples were actually
 ## done with primers targeting different region. Because we pcr.seqs() the reference alignment with
@@ -148,12 +150,11 @@ unique.seqs(fasta=current,count=current)
 ## _EDIT_ (maybe). Preclustering. SOP says allowing for 1 diff per 100 nt is appropriate, and we have 
 ## min 400 long contigs in the current MiSeq V13 runs. You might want to be less aggressive with `diffs`
 ## parameter if your input is full-overlap V4. 
-## Note: the command below affects files in the same ways as unique.seqs
 #
 ##V13
 #pre.cluster(fasta=current,count=current,diffs=4)
 ##V4
-pre.cluster(fasta=current,count=current,diffs=4)
+pre.cluster(fasta=current,count=current,diffs=3)
 ## summary just in case
 summary.seqs(fasta=current,count=current)
 ## Note: In the SOP, notice that .align goes into the pre.cluster and comes
@@ -186,18 +187,22 @@ summary.seqs(fasta=current,count=current)
 ## holds last `current` vars
 #set.logfile(name=split.abund.logfile)
 ## Create instead a checkpoint of the logfile for later use.
-## *Important*: this assumes that there is a single `mothur.*.log` (you ran Mothur once or cleaned up
-## the logs after multiple runs).
-system(cp mothur.*.logfile checkpoint.logfile)
+## The command below tries to pick the latest `mothur.*.log` (presumably current) Mothur log
+## in case you ran Mothur several times in the current directory).
+system(cp $(ls -t1 mothur.*.logfile | head -n 1) checkpoint.logfile)
 ## Split fasta and count files into abund (total count > cutoff) and rare (total count <= cutoff)
 ## partitions and generate accnos files for the IDs of unique sequences in each.
 ## accnos files will always have fixed names rare.accnos and abund.accnos
 split.abund(fasta=current,count=current,accnos=true,cutoff=1)
+## Clear current fasta variable as a safety measure to tirgger erros if checkpoint.logfile
+## cannot be loaded below
+set.current(clear=fasta)
 ## restore `current` vars as they were before split.abund
 load.logfile(logfile=checkpoint.logfile)
 ## Apparent Mothur bug (v.1.34): switch back to appending to the main logfile
 #set.logfile(name=main.logfile,append=T)
-## Drop selected sequences from fasta and adjust count file
+## Drop selected sequences from fasta and adjust count file. _EDIT_ comment out next line if
+## you do not want to drop singletons here
 remove.seqs(fasta=current,count=current,accnos=rare.accnos)
 ## summary just in case
 summary.seqs(fasta=current,count=current)
