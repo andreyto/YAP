@@ -33,6 +33,8 @@ export YAP_DEPS="/home/atovtchi/work/YAP.deps/bin"
 ## This will be used if --annotations argument is not passed to entry script
 export YAP_DATA="/home/atovtchi/work/YAP.deps/ANNOTATION/"
 
+source /usr/local/sge_current/jcvi/common/settings.sh
+
 export PATH=$YAP_DEPS:/usr/local/packages/graphviz/bin:$PATH
 
 # make sure all the libraries are linked
