@@ -860,8 +860,8 @@ group.add_option("-s", "--no-statistics", dest="no_statistics", action = "store_
 group.add_option("--no-input-qc", dest="no_input_qc", action = "store_true", default=False,
                  help="""If set, do not run QC report on the input sequence files. [%default]""", metavar="#") 
  
-group.add_option("--no-pcr-reference", dest="no_pcr_reference", action = "store_true", default=False,
-                 help="""Do not cut reference alignment to the region defined by the primers in the manifest. [%default]""", metavar="#") 
+group.add_option("--pcr-reference", dest="no_pcr_reference", action = "store_false", default=True,
+                 help="""Cut reference alignment to the region defined by the primers in the manifest. [False]""", metavar="#") 
  
 group.add_option("--no-trim-alignment", dest="no_trim_alignment", action = "store_true", default=False,
                  help="""Do not trim alignment of sequences to the reference alignment based on coverage. [%default]""", metavar="#") 
