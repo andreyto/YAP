@@ -411,7 +411,8 @@ class   TaskQueueStatus(ReportingThread):
     def do_run(self):
         BOH.toPrint("-----","BATCH","Setting up the grid...")
         time.sleep(5)
-        while YAPGlobals.step_dummy_thread or (activeCount()>3 or self.running>0 or self.scheduled.qsize()>0):
+        while not self.stopped():
+        #while YAPGlobals.step_dummy_thread or (activeCount()>3 or self.running>0 or self.scheduled.qsize()>0):
 
             self.pollfinished()
             self.pollqueues()
@@ -423,9 +424,6 @@ class   TaskQueueStatus(ReportingThread):
             
             time.sleep(self.update)
             
-            if self.stopped():
-                break
-        
         BOH.toPrint("-----","BATCH","{}\nGrid Offline.".format(self))
         
         print self  

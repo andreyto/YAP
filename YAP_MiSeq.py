@@ -1018,9 +1018,9 @@ finally:
     for o in O:
         o.join()
 
-    if YAPGlobals.step_dummy_thread:
-        BOH.stop()
-        QS.stop()
+    #if YAPGlobals.step_dummy_thread:
+    BOH.stop()
+    QS.stop()
 
     BOH.join()
     QS.join()
