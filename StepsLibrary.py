@@ -1269,7 +1269,13 @@ class   DefaultStep(DefaultStepBase):
                 if os.path.islink(targ_path):
                     os.remove(targ_path)
                 elif os.path.exists(targ_path):
-                    shutil.rmtree(targ_path)
+                    if os.path.isdir(targ_path):
+                        shutil.rmtree(targ_path)
+                    else:
+                        try:
+                            os.remove(targ_path)
+                        except:
+                            pass
                 if (ln):
                     command = "cp -s %s %s" % (file, targ )
                 else:
