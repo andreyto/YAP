@@ -378,11 +378,12 @@ def preprocess():
             ARGS = { 
                     "-Q": Q
             }
-            P3 = fastq2fasta(dict(), ARGS, [P2])
+            P3_1 = fastq2fasta(dict(), ARGS, [P2])
         else:
-            P3 = P2_0
+            P3_1 = P2_0
 
-        
+        P3 = MaskType("fastq",[P3_1])
+
         #### use fuzznuc to find cut primer sequences
         ARGS = {
                 "-f": manifest.forward,
