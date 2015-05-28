@@ -11,6 +11,7 @@
 
 import YAPGlobals
 import sys, tempfile, shlex, glob, os, stat, hashlib, time, datetime, re, curses
+import shutil
 import threading
 from threading import *
 import dummy_threading
