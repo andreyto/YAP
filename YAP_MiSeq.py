@@ -781,7 +781,7 @@ def plotsAndStats(input):
     
     supplementary.append(s28)
     
-    if options.no_statistics:
+    if options.no_rarefaction:
         return ([s23, s24, s24_1, s25aa, s25bb, s26a, s27a, s28])
     else:
         args = {"force" : "list", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.01"}
@@ -857,6 +857,9 @@ group.add_option("-q", "--quick", dest="quickmode", action = "store_true", defau
 
 group.add_option("-s", "--no-statistics", dest="no_statistics", action = "store_true", default=False,
                  help="""If set, do not do statistical analysis (future default). [%default]""", metavar="#") 
+ 
+group.add_option("--no-rarefaction", dest="no_rarefaction", action = "store_true", default=False,
+                 help="""If set, do not do run rarefaction analysis (that can take a very long time for large sample sizes). [%default]""", metavar="#") 
  
 group.add_option("--no-input-qc", dest="no_input_qc", action = "store_true", default=False,
                  help="""If set, do not run QC report on the input sequence files. [%default]""", metavar="#") 
@@ -984,7 +987,7 @@ try:
 
         if options.sampletimes==0:
             fin = finalize(READY)   
-            if not options.no_statistics:
+            if not options.no_rarefaction:
                 y = R_rarefactions(dict(), dict(), fin)
                 z = R_OTUplots(dict(), dict(), fin)
                 supplementary.append(y)
