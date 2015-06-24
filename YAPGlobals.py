@@ -7,6 +7,9 @@ debug_grid_tasks = False
 ## Just run everything locally in a blocking subprocess call, for debugging
 dummy_grid_tasks = False
 
+## Modifier to scale up for large inputs
+large_run = False
+
 ## this will cause exception when StepDefault.find() does not find
 ## anything, but it turns out to be a routine situation, so do not
 ## use this yet

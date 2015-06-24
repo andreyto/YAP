@@ -548,7 +548,11 @@ class   TaskQueueStatus(ReportingThread):
                 for k in ("medium.q", "default.q"):
                     if queues[k] >= queues[self.bestqueue]: 
                         self.bestqueue = k          
-                    
+            if YAPGlobals.large_run:
+                if self.bestqueue not in ("himem.q", "default.q"):
+                    ## this queue has no wall clock time limit. make.shared was running out
+                    ## of 12 hour limit in medium.q for 3K samples
+                    self.bestqueue = "default.q"
 
 ### sanity check, this should match the counters                
     def pollrunning(self):
