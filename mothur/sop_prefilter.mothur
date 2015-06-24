@@ -65,11 +65,11 @@ set.current(processors=4)
 #set.dir(tempdefault=/home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all)
 ## We instead copy the DBs into current dir and rename them to have stable names in the script below:
 ## _EDIT_ paths of the original reference files
-#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.seed_v119.align ref.align)
-#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.gold.align ref_chimera.align)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.seed_v119.align ref.align)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.gold.align ref_chimera.align)
 ## As per the SOP, we use pds trainset to detect non-bacterial sequences for removal
-#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.fasta rdp.fasta)
-#system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.tax rdp.tax)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.fasta rdp.fasta)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.tax rdp.tax)
 
 ## _EDIT_ start and end coordinates below for your primers and the current version of reference alignment.
 ## The current coords in the command below are for V13 and specifc DB version.
@@ -83,7 +83,9 @@ set.current(processors=4)
 ##V13
 #pcr.seqs(fasta=ref.align, start=1000, end=13900, keepdots=F)
 ##V4 RUN10
-pcr.seqs(fasta=ref.align, start=13859, end=23444, keepdots=F)
+#pcr.seqs(fasta=ref.align, start=13859, end=23444, keepdots=F)
+##V4 Alex run 05/2015
+pcr.seqs(fasta=ref.align, start=13862, end=23444, keepdots=F)
 #system(cp ref.align ref.pcr.align)
 #set.current(fasta=ref.pcr.align)
 ## Steps to figure out the start-end coordinates for pcr.seqs() above:
@@ -115,6 +117,7 @@ make.contigs(file=input.files)
 ## was still some sequence to the left of the forward primer. And make.contigs() does not tolerate the case
 ## when only primers are provided - it also needs the barcodes.
 ## I used the command below
+## _EDIT_ change -f and -r strings below for your primers
 system(/home/atovtchi/work/YAP.deps/bin/python /home/atovtchi/work/YAP/PrimerClipper.py  -m 1  -f GTGCCAGCHGCYGCGGT  -r GGACTACNNGGGTWTCTAAT  -i input.trim.contigs.fasta)
 set.current(fasta=input.trim.contigs.noprimers.fasta)
 summary.seqs(fasta=current)
@@ -203,7 +206,7 @@ load.logfile(logfile=checkpoint.logfile)
 #set.logfile(name=main.logfile,append=T)
 ## Drop selected sequences from fasta and adjust count file. _EDIT_ comment out next line if
 ## you do not want to drop singletons here
-remove.seqs(fasta=current,count=current,accnos=rare.accnos)
+#remove.seqs(fasta=current,count=current,accnos=rare.accnos)
 ## summary just in case
 summary.seqs(fasta=current,count=current)
 ## ==End of Dropping singleton pre-clusters==
