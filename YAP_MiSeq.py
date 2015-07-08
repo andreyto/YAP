@@ -16,6 +16,8 @@ from StepsLibrary import *
 from StepsLibrary_EXP import *
 from collections import defaultdict
 from Queue import Queue
+##threading redefines enumerate() with no arguments. as a kludge, we drop it here
+globals().pop('enumerate',None)
 
 _author="Sebastian Szpakowski"
 _date="2013/04/01"
@@ -154,11 +156,8 @@ class InfoValidator:
         sys.exit(code)
         
     def getTrimpoints(self):
-        primers = self.primersF.union(self.primersR)
-        if "AGAGTTTGATYMTGGCTCAG" in primers and "ATTACCGCGGCTGCTGG" in primers:
-            return "1044", "13127", "1044-13127"
-        else:
-            return "0", "0", "unknown"
+        return "0", "0", "unknown"
+
     def getTech(self):
         return self.tech
      
@@ -171,7 +170,8 @@ class InfoParserMiSeq:
         self.primers = set()
         self.forward = ""
         self.reverse = ""
-        
+        ## scramble the order of samples so that any following partitioning would
+        ## not be correlated with their original order
         for line in pseudo_shuffle(self.info,skip=1):
             path = os.path.abspath(line[0].strip())
             file1 = line[1].strip()
@@ -226,7 +226,7 @@ class InfoParserMiSeq:
     def getSampleID(self, file):
         return self.IDs[file]
        
-    def getPrimerFilename(self):
+    def writePrimerFilename(self):
         primerfilename =  "primers.fasta"
         
         if len(self.primers)>4:
@@ -246,23 +246,57 @@ class InfoParserMiSeq:
 #################################################
 ##        Functions
 ##
+   
+def pcr_reference(
+        manifest,
+        reference_file,
+        out_type,
+        step_import_pcr_target,
+        pcr_target_idseq,
+        pcr_target_padding):
+    """Prepare oligos file and call Mothur pcr.seqs on the reference alignment"""
     
+    inp = {out_type: [reference_file]}
+    step_import_ref_ali = FileImport(inp)
+
+    if not options.no_pcr_reference:
+        
+        step_pcr = PcrReferenceAlignmentStep(
+                dict(pcr_target_idseq=pcr_target_idseq,
+                    pcr_target_padding=pcr_target_padding,
+                    primer_forward=manifest.forward,
+                    primer_reverse=manifest.reverse,
+                    align_type=out_type
+                    ),
+                [step_import_ref_ali,step_import_pcr_target]
+                )
+        
+        step_type = FileTypeMaskInput({"fasta":out_type}, [step_pcr])
+        
+        step_mask = MaskExceptType(out_type,[step_type])
+        
+        return [step_mask]
+
+    else:
+
+        return [step_import_ref_ali]
+    
+
 def preprocess():
-    forprocessing = InfoParserMiSeq(options.fn_info)
     PREPROCESS = list()
 
-    for files in forprocessing.getFiles():
+    for (i_sample,files) in enumerate(manifest.getFiles()):
         INS = {}
         
         
         if len(files) == 2:
             M1 = files[0]
             M2 = files[1]
-            sampleid = forprocessing.getSampleID(M1)
+            sampleid = manifest.getSampleID(M1)
             INS = {"mate1": ["%s~%s" % (M1, sampleid)], "mate2": ["%s~%s" % (M2, sampleid)]}
         else:
             M1 = files[0]
-            sampleid = forprocessing.getSampleID(M1)
+            sampleid = manifest.getSampleID(M1)
             INS = {"fastq": ["%s~%s" % (M1, sampleid)]}
           
         #### import files    
@@ -274,20 +308,21 @@ def preprocess():
         #### determine the encoding of fastQ
         Q = getQ(M1)
         
-       
         if Q == "":
             print (Q)
             print "Q issues"
             print files
             sys.exit(1)
-        ### generate quality information:
-        ARGS = {
-             "-h": options.minqual,
-             "-m": "",
-             "-v": ""
-            }
-        qc = SQA(ARGS, [x])
-        supplementary.append(qc) 
+        
+        if not options.no_input_qc:
+            ### generate quality information:
+            ARGS = {
+                 "-h": options.minqual,
+                 "-m": "",
+                 "-v": ""
+                }
+            qc = SQA(ARGS, [x])
+            supplementary.append(qc) 
         
         ## do not split until I implement building table file for input
         ## fastq for make.contigs (it does not understand file lists
@@ -343,21 +378,22 @@ def preprocess():
             ARGS = { 
                     "-Q": Q
             }
-            P3 = fastq2fasta(dict(), ARGS, [P2])
+            P3_1 = fastq2fasta(dict(), ARGS, [P2])
         else:
-            P3 = P2_0
+            P3_1 = P2_0
 
-        
+        P3 = MaskType("fastq",[P3_1])
+
         #### use fuzznuc to find cut primer sequences
         ARGS = {
-                "-f": forprocessing.forward,
-                "-r": forprocessing.reverse,
+                "-f": manifest.forward,
+                "-r": manifest.reverse,
                 "-m": "1"
         }
         P4 = PrimerClipper ( {}, ARGS, [P3])
 
         ### make fastA headers less problematic
-        P5 = FastaHeadHash({}, {}, [P4])
+        P5 = FastaHeadHash({}, { "--prefix":"{}".format(i_sample), "--id-gen":"iid" }, [P4])
         P6 = FileMerger("fasta", [P5])
         P7 = MakeGroupsFile([P6], sampleid)
         P8 = MakeNamesFile([P6])
@@ -374,16 +410,16 @@ def preprocess():
     
     args = {
             "force" : "fasta,name,group",
-            "find": "groups" 
+            "find_or_skip_step": "groups" 
             }   
     A3 = MothurStep("remove.groups", options.nodesize, dict(), args, [A2])   
 
-    return (A3)
+    return [A3]
 
 def finalize(input):
     
     
-    clean = CleanFasta(dict(), [input])
+    clean = CleanFasta(dict(), input)
     
     ####### remove sequences that are too short, and with ambiguous bases 
     args = { "minlength" : "%s" % ( options.minlength ),
@@ -418,13 +454,18 @@ def finalize(input):
     ### aggressive de-noising:
     elif options.strictlevel==2:
         args=         { 
-                        "T" : "%s" % (options.nodesize)
+                        "T" : "%s" % (options.nodesize),
+                        "splits" : options.preclust_splits
                     }
         CD_1 = CDHIT_Preclust(options.nodesize, args, [clean2])
         
-    CD_2aa = CDHIT_Mothurize(dict(), CD_1)
+    CD_Moth = CDHIT_Mothurize(dict(), CD_1)
+    ##hide cdhit cluster output type so that if final clustering
+    ##somehow does not make its own, this would not get picked up
+    CD_2aa = MaskType("cdhitclstr",[CD_Moth])
 
     if options.min_precluster_size > 0:
+        ##TODO: replace with Mothur command split.abund
         args = {"min_cluster_size": options.min_precluster_size} 
         CD_2ab =  MakeAccnosFromName(args,[CD_2aa])
         args = {}
@@ -436,17 +477,26 @@ def finalize(input):
             "report": "passing"}
     CD_2a = GroupRetriever(args, [CD_2])
     OutputStep("3-UNIQUE", "groupstats,tre,fasta,group,name,list,svg,pdf,tiff,taxsummary,globalsummary,localsummary", CD_2a)  
+
     
     #### add reference sequences to the merged experiments' file
     CD_3 = FileMerger("fasta,name,group,qfile", [CD_2, REF_1, REF_2, REF_3])
     
+    PCR_ref = pcr_reference(
+            manifest=manifest,
+            reference_file=os.path.join(options.dir_anno,_alignment),
+            out_type="refalign",
+            step_import_pcr_target=REF,
+            pcr_target_idseq=_referenceseqname,
+            pcr_target_padding=options.pcr_target_padding)
+
     #### align to reference database
-    inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment)] }
     args = {    "flip":"t", 
-                "ksize": "8"
+                "ksize": "8",
+                "find_req":"reference=refalign"
             }   
      
-    CD_4 = MothurStep("align.seqs", options.nodesize, inputs, args, [CD_3])
+    CD_4 = MothurStep("align.seqs", options.nodesize, {}, args, PCR_ref+[CD_3])
     
     #### AlignmentSummary determining alignment trimming options 
     #### sets trimstart and trimend variables that can be used by in subsequent steps.
@@ -481,7 +531,7 @@ def finalize(input):
     cleanCD = cleanup(CD_5)
     args = {"mingroupmembers": 0, 
             "report": "passing"}
-    cleanCDa = GroupRetriever(args, [cleanCD])
+    cleanCDa = GroupRetriever(args, cleanCD)
     OutputStep("5-CLEAN", "groupstats,fasta,group,name,list,svg,pdf,tiff,taxsummary,globalsummary,localsummary", cleanCDa)
     
     clusterCD = CDHITCluster(cleanCD)
@@ -496,6 +546,56 @@ def finalize(input):
         output2 = x
         
     return (output2)
+    
+
+def remove_chimera(input):
+    ####### find chimeric sequences  
+    toremove = list()
+    ## we are already looking at input sequences that were aligned to reference
+    ## alignment and cut to the aligned region, so there is no point for us to
+    ## consider chimeras that involve other regions, therefore, at first glance
+    ## it would make snse to pcr-cut the reference alignment used for chimera
+    ## detection. However, what if chimera involves a small chunk of sequence
+    ## outside of the targeted region, small enough that it still aligns to the
+    ## target region? We keep the full length reference alignment for chimera
+    ## detection for now
+    for ch in [ "uchime" ]:
+        ### chimeras against reference
+        args = {"force" : "fasta,reference", "dereplicate" : "t"}
+        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
+        
+        A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, input)    
+        
+        toremove.append(A)
+        
+        if not options.quickmode:
+            ### chimeras against self
+            ### Seems like a bug in Mothur - it prints errors that non-centroid
+            ### (non-unique) sequences from name file are not found in fasta file (and they
+            ### should not be). To work around it, we create a count file just for this
+            ### chimera.uchime
+            A1 = MothurStep("count.seqs",1, {}, {"force":"name,group"}, input)    
+
+            args ={"force_exclude": "name,group", "force": "count,fasta", "dereplicate" : "t"}
+            inputs = {}
+            
+            A2 = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, A1)    
+            ### hide count file from later steps
+            A = MaskType("count",A2)
+
+            toremove.append(A)
+        
+    ### merge all accnos files and remove ALL chimeras    
+    allchimeras = FileMerger("accnos", toremove)
+
+
+    args ={"force_exclude": "fastq"}
+    B = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
+    
+    ####### remove empty columns after chimeras were removed
+    args = {"vertical" : "T"} #somehow trump=. here removes everything
+    out = MothurStep("filter.seqs",options.nodesize, dict(), args, [B]) 
+    return [out]
 
 def cleanup(input):
 
@@ -505,9 +605,13 @@ def cleanup(input):
             "groups": "ref" 
             }
             
-    s15 = MothurStep("remove.groups", options.nodesize, dict(), args, [input])
+    s15 = MothurStep("remove.groups", options.nodesize, dict(), args, input)
     
-    ####### remove sequences that are too short (bad alignment?)  
+    ####### remove sequences that are too short (bad alignment?) 
+    ##A.T. Note that screen.seqs() expunges gaps before calculating sequence length,
+    ##so if you trimmed the alignment region, then things that would be aligned to
+    ##other regions are going to be dropped here because they are too short within the 
+    ##alignment window.
     args = {
                 "minlength" : "%s" % (options.minlength), 
                 "maxambig" : "0",
@@ -515,28 +619,6 @@ def cleanup(input):
             }
     s16 = MothurStep("screen.seqs", options.nodesize, dict(), args, [s15])
     
-    ####### find chimeric sequences  
-    toremove = list()
-    for ch in [ "uchime" ]:
-        ### chimeras against reference
-        args = {"force" : "fasta,reference", "dereplicate" : "t"}
-        inputs = {"reference": ["%s/%s" % (options.dir_anno, _alignment_chimera)] }
-        
-        A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
-        toremove.append(A)
-        
-        if not options.quickmode:
-            ### chimeras against self
-            args ={"force": "name,group,fasta", "dereplicate" : "t"}
-            inputs = {}
-            
-            A = MothurStep("chimera.%s" % (ch),options.nodesize, inputs, args, [s16])    
-            toremove.append(A)
-        
-    ### merge all accnos files and remove ALL chimeras    
-    allchimeras = FileMerger("accnos", toremove)
-    args ={"force_exclude": "fastq"}
-    s17 = MothurStep("remove.seqs",options.nodesize, dict(), args, allchimeras)
     
     #### if primer trimming points are not unknown
     if _trimstart!=_trimend:
@@ -551,26 +633,50 @@ def cleanup(input):
                 "e" : "find:trimend"
         }
      
-        
-    s18a = AlignmentTrim(dict(), args, [s17])
+    ## A.T. This step has no counterpart in the SOP. Here it cuts the alignment
+    ## at both ends at 75% of the max observed coverage, and screen.seqs() after 
+    ## that drops everything that was
+    ## aligned beyond the trimmed window. In the original YAP, the combination
+    ## of aligning to the full length database, finding where coverage drops
+    ## below 75% of the maximum, cutting and dropping by length must be the way
+    ## of getting rid of sequences that align to a wrong region.
+    ## In the SOP, they do pcr.seqs() (optional), followed by alligning and dropping 
+    ## by mode start and end points, and filter.seqs() that removes all-gap columns and 
+    ## and columns that have at least one dot. Thus, there is a difference in effects with YAP: if there is a batch
+    ## of 100bp sequences that are aligned in the middle of the alignment, SOP
+    ## will drop them too. YAP will keep them. In fact, they increase the max coverage
+    ## that YAP computes, and the correspondng 75% coverage cutoff point that it uses
+    ## to trim the alignment, thus cutting legitimate alignment regions of longer
+    ## sequences. It is also not clear why YAP wants to trim so aggressively the longer alignments that overlap
+    ## the target region. Cutting at 75% of the max coverage means, for the start point, that only 25%
+    ## of all sequences start to the right of that point.
+    if not options.no_trim_alignment:
+        s18a = AlignmentTrim(dict(), args, [s16])
+    else:
+        s18a = s16
             
     ####### remove sequence fragments, bad alignments (?) 
-    args = {}
-    if options.dynamic:
-        ##dynamic means alignments were trimmed by now, and bad became short?
-        args = { "minlength" : "50" ,
-                 "force": "fasta,name,group"}
-    else:
-        args = { "minlength" : "%s" % (options.minlength),
-                 "force": "fasta,name,group"}
+    ##dynamic means alignments were trimmed by now, and bad became short?
+    args = {"minlength" : "{}".format(50 if options.dynamic else options.minlength) ,
+            "force": "fasta,name,group",
+            "force_exclude":"summary"}
+    if options.alignment_screen_start_end_criteria < 100:
+        args.update({
+            "optimize":"start-end",
+            "criteria":"{}".format(options.alignment_screen_start_end_criteria)}
+            )
     s18b = MothurStep("screen.seqs", options.nodesize, dict(), args, [s18a])
+
     
     ### build a tree
     #s18b_tree = ClearcutTree({}, s18b)
     
     ####### remove empty columns
-    args = {"vertical" : "T"} #somehow trump=. here removes everything
+    args = {"vertical" : "T"} #sometimes trump=. here removes everything, which means
+    ## we still have a dot at every position from at least one sequence
     s19 = MothurStep("filter.seqs",options.nodesize, dict(), args, [s18b]) 
+    
+    s19a = remove_chimera(s19)
     
     ####### taxonomy
     inputs = {    "reference": ["%s/%s" % (options.dir_anno,_trainset)],
@@ -578,14 +684,14 @@ def cleanup(input):
             }
             
     args = {    "iters" : "100",
-            "cutoff":  "60"
+            "cutoff":  "{}".format(options.classify_seqs_cutoff)
             }
-    s20 = MothurStep("classify.seqs", options.nodesize, inputs, args, [s19])
+    s20 = MothurStep("classify.seqs", options.nodesize, inputs, args, s19a)
     
     ### remove - and . for subsequent clustering efforts 
     s21 = CleanFasta(dict(), [s20])
     
-    return (s21)
+    return [s21]
 
 def CDHITCluster(input):
     cdhits = list()
@@ -598,7 +704,7 @@ def CDHITCluster(input):
                 "T": "%s" % (options.nodesize) 
                 }
         
-        CD_1 = CDHIT_EST(options.nodesize, args, [input])
+        CD_1 = CDHIT_EST(options.nodesize, args, input)
         
         ### make sth. analogous to mothur's labels
         arg = 1.0 - float(arg)
@@ -610,12 +716,14 @@ def CDHITCluster(input):
         args = {"mode": arg    
                 }
         CD_2 = CDHIT_Mothurize(args, CD_1)
-        CD_2a = CDHIT_Perls({}, CD_2)            
+        CD_2aa = MothurStep("get.sabund", 1, dict(), {}, [CD_2])
+        CD_2ab = MothurStep("get.rabund", 1, dict(), {}, [CD_2])
+        CD_2a = CDHIT_Perls({}, [CD_2aa,CD_2ab])            
         cdhits.append(CD_2)
                 
     READY = FileMerger("list,rabund,sabund", cdhits)    
     SORTED = FileSort("list,rabund,sabund", READY)
-    return (SORTED)
+    return [SORTED]
 
 def plotsAndStats(input):
     import re
@@ -623,7 +731,7 @@ def plotsAndStats(input):
     ### all groups!
     args = {"mingroupmembers": 0, 
             "report": "passing"}
-    s23 = GroupRetriever(args, [input])
+    s23 = GroupRetriever(args, input)
     
     ######## make a shared file 
     labels = ["0.01","0.03","0.05","0.1"]
@@ -674,16 +782,14 @@ def plotsAndStats(input):
     
     supplementary.append(s28)
     
-    args = {"force" : "list", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.01"}
-    s29 = MothurStep("rarefaction.single", options.nodesize, dict(), args, [s24])
-    #return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29])
-    
-    if options.quickmode:
-        return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29])
+    if options.no_rarefaction:
+        return ([s23, s24, s24_1, s25aa, s25bb, s26a, s27a, s28])
     else:
+        args = {"force" : "list", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.01"}
+        s29 = MothurStep("rarefaction.single", options.nodesize, dict(), args, [s24])
         args = {"force" : "shared", "calc": "nseqs-sobs-simpson-invsimpson-chao-shannon-shannoneven-coverage", "freq": "0.05"}
         s30 = MothurStep("rarefaction.single",options.nodesize, dict(), args, [s24]) 
-        return ([s23, s24, s25aa, s25bb, s26a, s27a, s28, s29, s30])
+        return ([s23, s24, s24_1, s25aa, s25bb, s26a, s27a, s28, s29, s30])
     
     
 #################################################
@@ -711,7 +817,7 @@ group.add_option("-Y", "--Yap", dest="mode", default="16S",
 group.add_option("-D", "--dynamic", dest="dynamic", action = "store_true", default=True,
                  help="""If specified, alignment will be scanned for primer locations and trimmed accordingly. Otherwise a database of known primers and trimming points will be used. [%default]""", metavar="#") 
 
-group.add_option("-d", "--thresh", dest="dynthresh", default=0.75, type="float",
+group.add_option("-d", "--trim-alignment-thresh", dest="dynthresh", default=0.75, type="float",
                  help="""in conjunction with -D, otherwise this is ignored. This allows to specify how much of the alignment to keep using the per-base coverage. The [%default] value indicates that ends of the alignment are trimmed until a base has a coverage of [%default] * peak coverage.""", metavar="#") 
 
 group.add_option("-a", "--annotations", dest="dir_anno", default=os.environ["YAP_DATA"]+"/",
@@ -741,11 +847,32 @@ group.add_option("--use-mates", dest="use_mates", default="both", type="choice",
 group.add_option("-Q", "--minqual", dest="minqual", default=30, type="int",
                  help="Keep stretches of reads this good or better (if merging paired reads, this is done after merging and only if merging method produces FASTQ - see also --minqual-before-pair-merge) #\n[%default]", metavar="#")
 
+group.add_option("--classify-seqs-cutoff", dest="classify_seqs_cutoff", default=60, type="int",
+                 help="Mothur classify.seqs(cutoff) parameter#\n[%default]", metavar="#")
+
+group.add_option("--pcr-target-padding", dest="pcr_target_padding", default=10, type="int",
+                 help="When trimming reference alignment, pad target reference sequence (ecoli) by that many bases beyond primer locations#\n[%default]", metavar="#")
+
 group.add_option("-q", "--quick", dest="quickmode", action = "store_true", default=False,
                  help="""If specified, only single, reference DB based chimera checking will be used. [%default]""", metavar="#") 
 
 group.add_option("-s", "--no-statistics", dest="no_statistics", action = "store_true", default=False,
                  help="""If set, do not do statistical analysis (future default). [%default]""", metavar="#") 
+ 
+group.add_option("--no-rarefaction", dest="no_rarefaction", action = "store_true", default=False,
+                 help="""If set, do not do run rarefaction analysis (that can take a very long time for large sample sizes). [%default]""", metavar="#") 
+ 
+group.add_option("--no-input-qc", dest="no_input_qc", action = "store_true", default=False,
+                 help="""If set, do not run QC report on the input sequence files. [%default]""", metavar="#") 
+ 
+group.add_option("--pcr-reference", dest="no_pcr_reference", action = "store_false", default=True,
+                 help="""Cut reference alignment to the region defined by the primers in the manifest. [False]""", metavar="#") 
+ 
+group.add_option("--no-trim-alignment", dest="no_trim_alignment", action = "store_true", default=False,
+                 help="""Do not trim alignment of sequences to the reference alignment based on coverage. [%default]""", metavar="#") 
+
+group.add_option("--alignment-screen-start-end-criteria", dest="alignment_screen_start_end_criteria", default=100, type="int",
+                 help="screen.seqs(fasta=alignment,optimize=start-end,criteria=?). Set to 100 to keep all sequences.#\n[%default].", metavar="#")
  
 parser.add_option("-H", "--head", dest="head", default=0, type="int",
                  help="For dry runs, import only # of lines from the input files")
@@ -768,6 +895,10 @@ group.add_option("-T", "--step-dummy-thread", dest="step_dummy_thread", action =
                  help="Use dummy threads inside the main thread for StepXXX classes (for interactive debugging)\n[%default]", metavar="#")
 group.add_option("--dummy-grid-tasks", dest="dummy_grid_tasks", action = "store_true", default=False,
                  help="Use dummy grid tasks that run tasks inside the current process in a blocking subprocess (for debugging). Probably use with dummy threads or you can flood the current node from multiple threads\n[%default]", metavar="#")
+group.add_option("--large-run", dest="large_run", action = "store_true", default=False,
+                 help="This will be a large scale run, modify behaviour in some places for scalability\n[%default]", metavar="#")
+group.add_option("--preclust-splits", dest="preclust_splits", default=10,
+                 help="Number of data splits in pre-clustering step. Might be useful if in a large scale run the CDHIT 454 preclust is killed\n[%default]", metavar="#")
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
@@ -775,6 +906,7 @@ parser.add_option_group(group)
 YAPGlobals.debug_grid_tasks = options.debug_grid_tasks
 YAPGlobals.step_dummy_thread = options.step_dummy_thread
 YAPGlobals.dummy_grid_tasks = options.dummy_grid_tasks
+YAPGlobals.large_run = options.large_run
 
 #################################################
 ##        Begin
@@ -806,10 +938,6 @@ if options.mode=="16S":
     ### mothur's curated version of RDP's curated train set and corresponding taxonomy
     _trainset = "trainset10_082014.pds.fasta"
     _taxonomy = "trainset10_082014.pds.tax"
-    ### until automatic primer detection is implemented, these are coordinates of primers
-    ### when aligned to the silva.bacteria.fasta (for in-silico PCR and subsequent primer trimming)
-    #_trimstart = "1044"
-    #_trimend = "13127"
     
 ### ITS NSI1 - NLB4 (barcoded)   
 elif options.mode=="ITS":
@@ -819,8 +947,6 @@ elif options.mode=="ITS":
     _alignment_chimera = _alignment
     _trainset = "FungalITSdb.092012.1.fasta"
     _taxonomy = "FungalITSdb.092012.1.tax"
-    #_trimstart = "1716"
-    #_trimend = "2795"    
 
 else:
     parser.print_help()
@@ -829,44 +955,52 @@ else:
 validator = InfoValidator(options.fn_info)  
 _trimstart , _trimend, _region = validator.getTrimpoints()    
 _tech = validator.getTech()
-                                                              
-BOH = init(options.project, options.email)
-BOH.toPrint("-----", "GLOBAL",  "We are in %s mode" % (options.mode)) 
-BOH.toPrint("-----", "GLOBAL",  "We will be processing %s data" % (_tech)) 
 
-if options.dynamic or _region == "unknown":
-    BOH.toPrint("-----", "GLOBAL",  "Dynamic alignment trimming enabled")
-    BOH.toPrint("-----", "GLOBAL",  "Alignment will be trimmed using %s * peak coverage threshold" % (options.dynthresh))
-    _trimstart = "0"
-    _trimend = "0"
-else:
-    BOH.toPrint("-----", "GLOBAL",  "Alignment trimming predefined: %s - %s" % (_trimstart, _trimend))
+O = list()
+init_res = init(options.project, options.email)
+BOH = init_res["BOH"]
+QS = init_res["QS"]
+MOTHUR = init_res["MOTHUR"]
+
+try:
+    try:
+        BOH.toPrint("-----", "GLOBAL",  "We are in %s mode" % (options.mode)) 
+        BOH.toPrint("-----", "GLOBAL",  "We will be processing %s data" % (_tech)) 
+
+        if options.dynamic or _region == "unknown":
+            BOH.toPrint("-----", "GLOBAL",  "Dynamic alignment trimming enabled")
+            BOH.toPrint("-----", "GLOBAL",  "Alignment will be trimmed using %s * peak coverage threshold" % (options.dynthresh))
+            _trimstart = "0"
+            _trimend = "0"
+        else:
+            BOH.toPrint("-----", "GLOBAL",  "Alignment trimming predefined: %s - %s" % (_trimstart, _trimend))
+
+        manifest = InfoParserMiSeq(options.fn_info)
 
 #############################
 #######################
 ##### reference: 
-inputs = {"fasta": ["%s/%s" % (options.dir_anno, _referenceseq)] }
-REF = FileImport(inputs)
-REF_1 = MakeNamesFile([REF])
-REF_2 = MakeGroupsFile([REF], "ref")
-REF_3 = MakeQualFile  ([REF], "40" )
+        inputs = {"fasta": ["%s/%s" % (options.dir_anno, _referenceseq)] }
+        REF = FileImport(inputs)
+        REF_1 = MakeNamesFile([REF])
+        REF_2 = MakeGroupsFile([REF], "ref")
+        REF_3 = MakeQualFile  ([REF], "40" )
 ##############################
 
-supplementary = list()
-READY = preprocess()
-O = list()
-O.append(OutputStep("1-PREPROCESS", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", READY))
+        supplementary = list()
+        READY = preprocess()
+        O.append(OutputStep("1-PREPROCESS", "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", READY))
 
-if options.sampletimes==0:
-    fin = finalize(READY)   
-    if not options.no_statistics:
-        y = R_rarefactions(dict(), dict(), fin)
-        z = R_OTUplots(dict(), dict(), fin)
-        supplementary.append(y)
-        supplementary.append(z)
-    O.append(OutputStep("6-ENTIRE", "taxonomy,shared,groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", fin))
-    O.append(OutputStep("8-TBC", "phylotax,group,list,fasta", fin))
-    
+        if options.sampletimes==0:
+            fin = finalize(READY)   
+            if not options.no_rarefaction:
+                y = R_rarefactions(dict(), dict(), fin)
+                z = R_OTUplots(dict(), dict(), fin)
+                supplementary.append(y)
+                supplementary.append(z)
+            O.append(OutputStep("6-ENTIRE", "taxonomy,shared,groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary,phylotax", fin))
+            O.append(OutputStep("8-TBC", "phylotax,group,list,fasta", fin))
+            
 #else:
 #    thefinalset = list()
 #    for k in xrange(0, options.sampletimes):
@@ -884,12 +1018,22 @@ if options.sampletimes==0:
 #        OutputStep("SAMPLED_%s" % (k), "groupstats,fasta,group,name,list,pdf,svg,tiff,taxsummary,globalsummary,localsummary", [tmp])
 #        thefinalset.append(tmp)
 #    
-O.append(OutputStep("7-SUPP_PLOTS", "tre,pdf,png,svg,tiff,r_nseqs,rarefaction,r_simpson,r_invsimpson,r_chao,r_shannon,r_shannoneven,r_coverage", supplementary))
+        O.append(OutputStep("7-SUPP_PLOTS", "tre,pdf,png,svg,tiff,r_nseqs,rarefaction,r_simpson,r_invsimpson,r_chao,r_shannon,r_shannoneven,r_coverage", supplementary))
+    except:
+        BOH.stop()
+        QS.stop()
+        raise
 
-for o in O:
-    o.join()
+finally:
+    for o in O:
+        o.join()
 
-    
+    #if YAPGlobals.step_dummy_thread:
+    BOH.stop()
+    QS.stop()
+
+    BOH.join()
+    QS.join()
     
 ###########################################################################    
 ##  

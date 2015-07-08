@@ -1,0 +1,280 @@
+## This implements [Mothur MiSeq SOP](http://www.mothur.org/wiki/MiSeq_SOP) as a single batch script.
+## It also adds removal of singletons after the pre-clustering step in
+## order to keep under control the computational requirements on 
+## large and noisy sequencing inputs.
+#
+## To run this script for a large input in a batch queueing system 
+## such as SGE, you would
+## need to use a command like the following (example is specific to JCVI SGE cluster;
+## backquotes separate commands from other text and should not be entered as
+## part of each command):
+## ```
+## qsub -P YOUR_PROJECT_CODE -cwd -pe threaded 64  -l "himem" -b y \
+## /path/to/mothur /path/to/sop_prefilter.mothur
+## ```
+## where your current working directory must have a file `input.files` in it
+## that is formatted as required for Mothur make.contigs() command. The above
+## will use 64 cores on a machine in `himem` queue. You should edit the 
+## set.current(processors=XX) command below to match that number.
+## 
+## If you need the script to stop mid-way (e.g. to figure out alignment trim points
+## by looking at the alignment summary), and then resume from where it stopped,
+## you can split this script into two files and add the following line to the top of the
+## second file:
+## `load.logfile(logfile=mothur.XXX.logfile)`
+## XXX are numbers that Mothur assigns when creating the logfile name. This will restore
+## your `current` Mothur pseudovariables to the values they had before your first
+## batch file finished execution. This script relies on `current` pseudovariable so that
+## it would be easy to add commands in a middle without having to propagate changed
+## output file names downstream throughout the script.
+## Note: if you need more flexibility and robustness in building pipelines from Mothur
+## commands, you should communicate with a Mothur instance through standard IO from a
+## scripting language such as Python or Perl and extract the file names that it prints after
+## each command.
+#
+## To pick and edit the parameters, you can edit your `input.files` to have just a few samples
+## for the first calibration run. Then browse through the logfile and summary files, determine
+## parameters such as trim points, enter them into this script, run small calibration dataset 
+## again, check the log again to make sure everything worked, and run with the full size
+## `input.files`.
+#
+#
+## You will need to modify the constants that are marked by a word _EDIT_
+## in the comments below throughout this script.
+#
+## Apparent Mothur bug (v.1.34):
+## We should be able to use the command below to control logfile name 
+## that we would use to checkpoint `current` variables by switching to
+## a new logfile temporarilty, using load.logfile() and set.logfile()
+## to restore the state and continue with the main logfile. Unfortunately,
+## set.logfile() just does nothing when called, and I still get the auto-
+## generated Mothur log name. So I have to use system() calls to make checkpoint
+## copies of the default log.
+#
+#set.logfile(name=main.logfile)
+#
+## Note: it is important to perform various summary steps as per SOP, otherwise,
+## by some reports, sometimes count file does not get properly updated.
+#
+## _EDIT_ to match number of cores you reserved for your job (if set as too large for a small
+## input, it can cause errors in v.1.34)
+set.current(processors=4)
+#
+## Optionally, _EDIT_ location of reference DBs (has to be writable by you because pcr.seqs below creates its
+## output where its input is).
+#set.dir(tempdefault=/home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all)
+## We instead copy the DBs into current dir and rename them to have stable names in the script below:
+## _EDIT_ paths of the original reference files
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.seed_v119.align ref.align)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/silva.gold.align ref_chimera.align)
+## As per the SOP, we use pds trainset to detect non-bacterial sequences for removal
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.fasta rdp.fasta)
+system(cp /home/atovtchi/work/packages/x86_64-rhel6/app/mothur/db/all/trainset10_082014.pds.tax rdp.tax)
+
+## _EDIT_ start and end coordinates below for your primers and the current version of reference alignment.
+## The current coords in the command below are for V13 and specifc DB version.
+## To figure out the coords, you can comment out the pcr.seq() line below, and uncomment all lines till
+## quit() including which are currently commented out with a single #. Get the alignment coordinates from the
+## summary report in standard output, extend outward by 50 bp each, enter into the pcr.seqs() command above,
+## comment out commands below till quit() including, and run this script again.
+## Alternatively, uncomment lines below that use original full length reference alignment and get the coords from
+## summary generated after align.seqs().
+#
+##V13
+#pcr.seqs(fasta=ref.align, start=1000, end=13900, keepdots=F)
+##V4 RUN10
+#pcr.seqs(fasta=ref.align, start=13859, end=23444, keepdots=F)
+##V4 Alex run 05/2015
+pcr.seqs(fasta=ref.align, start=13862, end=23444, keepdots=F)
+#system(cp ref.align ref.pcr.align)
+#set.current(fasta=ref.pcr.align)
+## Steps to figure out the start-end coordinates for pcr.seqs() above:
+## 1. We use oligos file to cut a full length reference sequence that is expected to 
+## be matched by primers in the oligos file (in this case we used E.coli sequence). Note that
+## doing this with the reference alignment directly somehow eliminated all sequences in Mothur v.1.34.
+#pcr.seqs(fasta=pcr_target.fasta,oligos=input.oligos,keepprimer=T)
+#summary.seqs(fasta=current)
+## 2. Align the pre-cut sequence to the reference alignment
+#align.seqs(fasta=current,reference=ref.align)
+#summary.seqs(fasta=current)
+#quit()
+## Based on benchmarking, you would need to take the pre-cut target alignment start-end and
+## extend outwards by 50 bp in order to cut the reference alignment for downstream use. If not for this,
+## you could automate everything by also uncommenting the command below.
+## 3. Use the aligned pre-cut sequence to cut the reference alignment
+#pcr.seqs(fasta=ref.align,ecoli=pcr_target.pcr.align,keepdots=F)
+summary.seqs(fasta=current)
+#
+## look at quality, optional
+fastq.info(file=input.files)
+summary.qual(qfile=current)
+#
+## We can see that the reverse MiSeq read drops in quality faster than forward.
+#
+## Merge paired end reads into contigs
+make.contigs(file=input.files)
+## need to trim the contigs - trim.seqs() command did not work for me for these V4 files where there
+## was still some sequence to the left of the forward primer. And make.contigs() does not tolerate the case
+## when only primers are provided - it also needs the barcodes.
+## I used the command below
+## _EDIT_ change -f and -r strings below for your primers
+system(/home/atovtchi/work/YAP.deps/bin/python /home/atovtchi/work/YAP/PrimerClipper.py  -m 1  -f GTGCCAGCHGCYGCGGT  -r GGACTACNNGGGTWTCTAAT  -i input.trim.contigs.fasta)
+set.current(fasta=input.trim.contigs.noprimers.fasta)
+summary.seqs(fasta=current)
+## _EDIT_ you might want to edit maxlength after looking at the summary
+screen.seqs(fasta=current, group=current, maxambig=0, minlength=100, maxlength=650,maxhomop=8)
+summary.seqs()
+unique.seqs(fasta=current)
+summary.seqs(fasta=current,name=current)
+count.seqs(name=current, group=current)
+summary.seqs(count=current)
+align.seqs(fasta=current, reference=ref.pcr.align)
+summary.seqs(fasta=current,count=current)
+##You can uncomment the line below if you are running alignment against the full length
+##reference alignment in order to find the start-end coords for pcr.seqs() command.
+#quit()
+## minlength cutoff is used to catch a possible data entry error when some samples were actually
+## done with primers targeting different region. Because we pcr.seqs() the reference alignment with
+## the expected primers, we should get very short or zero length alignments for those samples.
+## Note that Mothur computes minlength on the de-gapped sequences. Note that start-end combination will
+## leave only sequences that completely cover that range. Quoting screen.seqs() manual:
+## ```
+## optimize=start-end-minlength, would remove any sequence that starts after the position that 90% of 
+## the sequences do, or ends before the position that 90% of the sequences do, or whose length is 
+## shorter than 90% of the sequences
+## ```
+## In other words, higher values of `criteria` are more permissive (but criteria=100 results in an error eliminating
+## all sequences).
+screen.seqs(fasta=current, count=current, summary=current, optimize=start-end, criteria=90, minlength=100, maxhomop=8)
+summary.seqs(fasta=current,count=current)
+##trump=. removes all columns that have even a single `.`
+filter.seqs(fasta=current,vertical=T, trump=.)
+unique.seqs(fasta=current,count=current)
+## _EDIT_ (maybe). Preclustering. SOP says allowing for 1 diff per 100 nt is appropriate, and we have 
+## min 400 long contigs in the current MiSeq V13 runs. You might want to be less aggressive with `diffs`
+## parameter if your input is full-overlap V4. 
+#
+##V13
+#pre.cluster(fasta=current,count=current,diffs=4)
+##V4
+pre.cluster(fasta=current,count=current,diffs=3)
+## summary just in case
+summary.seqs(fasta=current,count=current)
+## Note: In the SOP, notice that .align goes into the pre.cluster and comes
+## out as .fasta. It still has gaps in it inserted by the alignment,
+## so this is just renaming, not gap removal.
+#
+## ==Dropping singleton pre-clusters==
+## *This is a key scalability trick*
+## With the next set of commands, we separate current clusters into abundant and 
+## rare ones, and drop the rare ones. On noisy datasets, we expect that most of the
+## singletons after the aggressive preclustering step are sequences with errors.
+## Such artifacts dramatically inflate the number of unique representatives that have to go
+## into the OTU clustering step downstream, and cause that step to run out of RAM
+## and/or time.
+## Depending on the size and quality of your data, you might even have to increase the
+## `cutoff` argument below to drop not just singletons but other small clusters as well.
+## The reasonable cutoff can be roughly determined this way:
+## - Run the entire script on a sufficiently large subset of your samples that still finishes with 
+##   just singleton removal
+## - Apply `split.abund(list=xxx.list,cutoff=yyy)` to your original `xxx.list` at variuous `cutoff`
+##   values, followed each time by rarefaction.single(list=xxx.abund.list)
+## - See at what cutoff values the curve starts saturating, assuming that you have determined before that your
+##   depth of sequencing should be sufficient for your target community (will not help you for extremely
+##   rich communities).
+## 
+## Some experience of dropping post-preclustering singletons has been reported in 
+## [doi: 10.4014/jmb.1409.09057]
+#
+## Apparent Mothur bug (v.1.34): switch to temporary logfile so that the previous 
+## holds last `current` vars
+#set.logfile(name=split.abund.logfile)
+## Create instead a checkpoint of the logfile for later use.
+## The command below tries to pick the latest `mothur.*.log` (presumably current) Mothur log
+## in case you ran Mothur several times in the current directory).
+system(cp $(ls -t1 mothur.*.logfile | head -n 1) checkpoint.logfile)
+## Split fasta and count files into abund (total count > cutoff) and rare (total count <= cutoff)
+## partitions and generate accnos files for the IDs of unique sequences in each.
+## accnos files will always have fixed names rare.accnos and abund.accnos
+split.abund(fasta=current,count=current,accnos=true,cutoff=1)
+## Clear current fasta variable as a safety measure to tirgger erros if checkpoint.logfile
+## cannot be loaded below
+set.current(clear=fasta)
+## restore `current` vars as they were before split.abund
+load.logfile(logfile=checkpoint.logfile)
+## Apparent Mothur bug (v.1.34): switch back to appending to the main logfile
+#set.logfile(name=main.logfile,append=T)
+## Drop selected sequences from fasta and adjust count file. _EDIT_ comment out next line if
+## you do not want to drop singletons here
+#remove.seqs(fasta=current,count=current,accnos=rare.accnos)
+## summary just in case
+summary.seqs(fasta=current,count=current)
+## ==End of Dropping singleton pre-clusters==
+#
+## Uncomment the line below if you want to do self-reference uchime
+#chimera.uchime(fasta=current,count=current,dereplicate=t)
+## Sample observed log trace from uchime is included below
+## 02:30 4.7Mb  100.0% 939/2586 chimeras found (36.3%)
+## 06:12 6.9Mb  100.0% 2649/5201 chimeras found (50.9%)
+#
+## For BEI benchmarking, we do reference-based uchime considering that the dataset is tiny
+## and there might not be sufficiently robust count values for unique sequences
+## for the self-reference uchime to work correctly (my assumption, not verified).
+## Reference-based uchime takes much longer on this dataset, and the result is
+## very similar to the one from self-reference uchime.
+## We use GOLD subset of Sylva alignment. Ideally, we should pcr.seqs it as well, I suppose.
+chimera.uchime(fasta=current,reference=ref_chimera.align,dereplicate=t)
+## From the count file, chimeras were removed during chimera.uchime if self-reference was used; 
+## now removing from fasta.
+remove.seqs(fasta=current, accnos=current, count=current)
+summary.seqs(fasta=current,count=current)
+## Per-sequence taxonomic classification
+classify.seqs(fasta=current, count=current, reference=rdp.fasta, taxonomy=rdp.tax, cutoff=80)
+## For samples with BEI controls only, we do not want to remove any lineage because if we find any taxa from a list below,
+## it is a sign that something went wrong. _EDIT_: You should uncomment two lines below for non-benchmark 
+## runs on bacterial samples.
+#remove.lineage(fasta=current, count=current, taxonomy=current, taxon=Chloroplast-Mitochondria-unknown-Archaea-Eukaryota)
+#summary.seqs(fasta=current, count=current)
+#
+## Optional for BEI only. HMP_MOCK.v35.fasta provided by the SOP is only V3-V5 region - you would have to 
+## prepare your own cutout from the full-length BEI reference if interested in estimating the per-base error 
+## rate in annotated sequences when using BEI controls.
+#seq.error(fasta=current,count=current,reference=HMP_MOCK.v35.fasta, aligned=F)
+#
+## ==Final OTU clustering - the most resource-intensive step==
+## Note: monitor resource utilization on your compute node during large runs. On JCVI SGE cluster, you can login 
+## to your batch node using: `qlogin -l hostname=hostname_where_mothur_job_runs_per_qstat -l trouble -P YOUR_PROJECT_CODE`
+## and run `top` where.
+## There are many variants how the combination of dist.seqs and cluster or cluster.split can be executed for
+## optimal speed and lower memory consumption (see Mothur docs). Below we let cluster.split to build distance matrix on 
+## the fly for the simplicity. The downside is that building the matrix will have to be repeated if cluster.split()
+## runs out of memory or otherwise does not succeed.
+## Splits are done based on taxonomic classification at an order level. For very uneven communities, that might not
+## buy you much.
+#dist.seqs(fasta=current, cutoff=0.20)
+##According to some reports, cluster.split() does not take advantage of the cutoff like cluster() does (not verified).
+cluster.split(fasta=current, count=current, taxonomy=current, splitmethod=classify, taxlevel=4, cutoff=0.15)
+make.shared(list=current, count=current, label=0.03)
+#
+## Consensus taxonomic classification of OTUs based on classifications of their individual sequence members.
+## We build taxonomic abundance count matrix that contains counts of sequences in each cell (`basis=sequence`).
+## You can also instead run the command wit `basis=otu` to get counts of OTUs in eac taxonomic bin (the
+## file names will be the same as with `basis=sequence`, so you would have to use system(mv ...) if you want to
+## keep both versions.
+## Note however, that it is more flexible to load shared file and OTU taxonomy file in some external application
+## (e.g. R or Python) and join-aggregate them there into taxonomic abundance because in that case you can easily filter out
+## rare (likely noise) OTUs before aggregating counts. You can do the same in Mothur by using split.abund() on the `list` file.
+classify.otu(list=current, count=current, taxonomy=current, label=0.03, basis=sequence)
+#classify.otu(list=current, count=current, taxonomy=current, label=0.03, basis=otu)
+## If your dataset is hopelessly huge in terms of the number of unique sequences for clustering OTUs, you can
+## comment out the OTU clustering+make.shared above and uncomment phylotype+make.shared pair below. It is not
+## clear to me what value it creates on top of already made taxonomic classification file that it uses as input.
+#phylotype(taxonomy=current)
+#Note: auto-generated labels after phylotype are in reveres order relative to taxonomic rank labels from classify.seqs().
+#make.shared(list=current, count=current, label=1)
+#classify.otu(list=current, count=current, taxonomy=current, label=1)
+## Prevent leaving multiple `mothur.*.logfile` files in the current directory because
+## this will break future runs of this script.
+system(for log in mothur.*.logfile; do mv $log finished.$log; done)
+quit()
+

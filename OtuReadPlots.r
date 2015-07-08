@@ -155,6 +155,7 @@ makePlot = function(filename = "read.groups.tab.txt", minreads = 0, mingroups = 
 			
 		# contour
 		require(MASS)
+        try( {
 		xykde = MASS::kde2d(subsetdata$reads, subsetdata$groups, lims = c( min(subsetdata$reads)-5, max(subsetdata$reads)+5, min(subsetdata$groups)-5, max(subsetdata$groups)+5) )
 		
 		if (sum(is.nan(xykde$z))>0)
@@ -169,7 +170,6 @@ makePlot = function(filename = "read.groups.tab.txt", minreads = 0, mingroups = 
 		col = rev(heat.colors(length(lev)))
 		contour(xykde, add = TRUE, levels = lev,
 			drawlabels = FALSE, col=col  )        
-		
 				
 		# trendline
 		trendline = lowess((subsetdata$reads), subsetdata$groups, f=0.1)
@@ -225,6 +225,7 @@ makePlot = function(filename = "read.groups.tab.txt", minreads = 0, mingroups = 
 	
 		#print ( nrow(x[x$groups<=1 & x$reads<=0.1,]) )
 		#print ( nrow(x))
+        } ) 
 	}
 
 	 
