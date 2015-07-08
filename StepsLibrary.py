@@ -41,6 +41,51 @@ _date="2012/09/20"
 _version="Version 2"
 
 
+def rmrf(targ_path):
+    if os.path.islink(targ_path):
+        os.remove(targ_path)
+    elif os.path.exists(targ_path):
+        if os.path.isdir(targ_path):
+            shutil.rmtree(targ_path)
+        else:
+            try:
+                os.remove(targ_path)
+            except:
+                pass
+
+def clean_flag_file(fname):
+    rmrf(fname)
+
+check_flag_str_OK = "OK"
+check_flag_str_Fail = "Fail"
+
+def check_flag_file(fname):
+    ## try multiple times while the content of flag file
+    ## is inconclusive or file does not exist, in order to
+    ## let shared file system view get updated
+    n_max_tries = 4
+    sec_wait = 5
+    i_try = 1
+    while True:
+        try:
+            if os.path.isfile(fname):
+                with open(fname,"r") as inp:
+                    cont = inp.read()
+                    cont = cont.strip() 
+                    if cont == check_flag_str_OK:
+                        return True
+                    elif cont == check_flag_str_Fail:
+                        return False
+            if i_try >= n_max_tries:
+                return False
+            time.sleep(sec_wait)
+            i_try += 1
+        except:
+            pass
+    return False
+
+         
+
 
 def pseudo_shuffle(strings,skip=0):
     """Shuffle strings deterministically (by hash).
@@ -634,10 +679,12 @@ class   TaskQueueStatus(ReportingThread):
 class GridTask():
     def __init__(self, template="default.q", command = "", name="default", 
             cpu="1", dependson=list(), cwd=".", debug=None, mem_per_cpu=2,
-            sleep_start=0):
+            sleep_start=0, flag_completion=False):
 
         if debug is None:
             debug = YAPGlobals.debug_grid_tasks
+
+        self.flag_file = None
         
         self.gridjobid=-1
         self.completed=False
@@ -722,7 +769,23 @@ class GridTask():
                 sleep_cmd = "sleep {}".format(sleep_start+random.randint(1,5))
             else:
                 sleep_cmd = ""
+
             input= "#!/bin/bash\n. {}\n{}\n{}\n".format(rcfilepath,sleep_cmd,self.inputcommand)
+            
+            if flag_completion:
+                try:
+                    flag_fobj, flag_file = tempfile.mkstemp(suffix="flagfile", prefix=px, dir=self.cwd, text=True)
+                    os.write(flag_fobj,"Created\n")
+                finally:
+                    os.close(flag_fobj)
+                self.flag_file = flag_file
+                
+                flag_file_base = os.path.basename(self.flag_file)
+                input += """\nif [[ "$?" != "0" ]]; then (echo {check_flag_str_Fail} > {flag_file_base}); else (echo {check_flag_str_OK} > {flag_file_base}); fi\nsync\n""".\
+                        format(flag_file_base=flag_file_base,
+                                check_flag_str_OK=check_flag_str_OK,
+                                check_flag_str_Fail=check_flag_str_Fail)
+
             with open(self.scriptfilepath, "w") as scriptfile:
                 scriptfile.write(input)
         finally:
@@ -798,6 +861,10 @@ class GridTask():
         with QS.any_task_completed:
             while not self.isCompleted():
                 QS.any_task_completed.wait()
+            if self.flag_file:
+                return check_flag_file(self.flag_file)
+            else:
+                return True
  
 
     #################################################
@@ -1126,7 +1193,25 @@ class   DefaultStep(DefaultStepBase):
             
         self.completed=True 
         BOH.deregister()
-                
+
+    def waitOnGridTasks(self,tasks,fail_policy="ExitOnFirst"):
+        fail_policy_values = ('ExitOnFirst','ExitOnLast','ExitNever','Ignore')
+        assert fail_policy in fail_policy_values, "Allowed values: {}".format(fail_policy_values)
+        failed_any = False
+        failed_descr = ""
+        for task in tasks:
+            res = task.wait()
+            failed_any |= (not res)
+            if fail_policy != "Ignore" and not res:
+                self.fail = True
+                failed_descr = "Grid ID: {}. Descr: {}".format(task.getGridId(),getUniqueID())
+                if fail_policy == "ExitOnFirst":
+                    raise ValueError("Step {} had grid task failing, aborting step. {}".format(self.stepname,failed_descr))
+        
+        if fail_policy == "ExitOnLast" and failed_any:
+            raise ValueError("Step {} had at least one grid task failing, aborting step. {}".format(self.stepname,failed_descr))
+        return not failed_any
+
     def makeManifest(self):
         assert self.workpathid
         pool_open_files.acquire()
@@ -1270,16 +1355,7 @@ class   DefaultStep(DefaultStepBase):
             else:   
                 targ = os.path.basename(file)
                 targ_path = os.path.join(self.stepdir,targ)
-                if os.path.islink(targ_path):
-                    os.remove(targ_path)
-                elif os.path.exists(targ_path):
-                    if os.path.isdir(targ_path):
-                        shutil.rmtree(targ_path)
-                    else:
-                        try:
-                            os.remove(targ_path)
-                        except:
-                            pass
+                rmrf(targ_path)
                 if (ln):
                     command = "cp -s %s %s" % (file, targ )
                 else:
@@ -2334,7 +2410,7 @@ class   CDHIT_Preclust(DefaultStep):
             self.nodeCPUs = ARGS["T"]
         else:
             self.nodeCPUs=nodeCPUs
-            ARGS["T"]=self.nodeCPUs     
+            ARGS["T"]=self.nodeCPUs
 
         #self.setInputs(INS)
         self.setArguments(ARGS)
@@ -2347,8 +2423,11 @@ class   CDHIT_Preclust(DefaultStep):
         cdhitpath = globals()["cdhitpath"] ## to be found by locals()
 
         args = ""   
+
+        arguments_copy = self.arguments.copy()
+        n_parts = arguments_copy.pop("splits",10)
                 
-        for arg, val in self.arguments.items():
+        for arg, val in arguments_copy.items():
             args = "%s -%s %s" % (args, arg, val) 
 
         fs = self.find("fasta")
@@ -2357,6 +2436,7 @@ class   CDHIT_Preclust(DefaultStep):
             fs.extend(self.find("mate2"))
 
         scratch_dir = os.path.join(self.stepdir,"scratch")
+        rmrf(scratch_dir)
         if not os.path.isdir(scratch_dir):
             os.makedirs(scratch_dir)
         scratch_dir = "scratch"
@@ -2369,16 +2449,15 @@ class   CDHIT_Preclust(DefaultStep):
             k = "{cdhitpath}cd-hit-dup -i {f} -o {f_base}.db-uniq -m false -e 4".format(**locals())
             
             self.message(k)
-            task_dup = GridTask(template=defaulttemplate, name=self.stepname+"_dup", command=k, cpu=1,  mem_per_cpu=31, dependson=list(), cwd = self.stepdir)
-            task_dup.wait()
+            task_dup = GridTask(template=defaulttemplate, name=self.stepname+"_dup", command=k, cpu=1,  mem_per_cpu=31, dependson=list(), cwd = self.stepdir,
+                    flag_completion = True)
+            self.waitOnGridTasks([task_dup],fail_policy="ExitOnFirst")
 
-            n_parts = 10 ##todo: compute from file size
-            
             k = "{cdhitpath}cd-hit-div.pl {f_base}.db-uniq {work_base} {n_parts}".format(**locals())
             
             self.message(k)
-            task_split = GridTask(template=defaulttemplate, name=self.stepname+"_div", command=k, cpu=1,  dependson=[], cwd = self.stepdir)
-            task_split.wait()
+            task_split = GridTask(template=defaulttemplate, name=self.stepname+"_div", command=k, cpu=1,  dependson=[], cwd = self.stepdir, flag_completion = True)
+            self.waitOnGridTasks([task_split],fail_policy="ExitOnFirst")
             tasks_454 = []
             splits_fasta=[]
             splits_clstr=[]
@@ -2392,13 +2471,13 @@ class   CDHIT_Preclust(DefaultStep):
                 
                 self.message(k)
                 
-                tasks_454.append(GridTask(template=defaulttemplate, name=self.stepname+"_div_454", command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir))
+                tasks_454.append(GridTask(template=defaulttemplate, name=self.stepname+"_div_454", 
+                    command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir, flag_completion = True))
                 
                 splits_fasta.append("{db_uniq_split}.nr1".format(**locals()))
                 splits_clstr.append("{db_uniq_split}.nr1-all.sort.clstr".format(**locals()))
 
-            for task in tasks_454:
-                task.wait()
+            self.waitOnGridTasks(tasks_454,fail_policy="ExitOnFirst")
             
             ## concatenate results from splits
             
@@ -2409,24 +2488,26 @@ class   CDHIT_Preclust(DefaultStep):
                            work_base)
             
             self.message(k)
-            task_cat = GridTask(template=defaulttemplate, name=self.stepname+"_cat", command=k, cpu=1,  dependson=[], cwd = self.stepdir)
-            task_cat.wait()
+            
+            task_cat = GridTask(template=defaulttemplate, name=self.stepname+"_cat", command=k, cpu=1,  dependson=[], cwd = self.stepdir, flag_completion = True)
+            self.waitOnGridTasks([task_cat],fail_policy="ExitOnFirst")
+            
             n_cpu_454=self.nodeCPUs
-            if not YAPGlobals.debug_grid_tasks:
-                cleanup_cmd = "&& rm -rf scratch"
-            else:
-                cleanup_cmd = ""
             
             k = """{cdhitpath}cd-hit-454 -i {work_base}.nr1 -o {work_base}.nr1.nr2 -c 0.98 -n 10 -b 10 -g 0 -M 0 -aS 0.0 -T {n_cpu_454} && \
                    {cdhitpath}clstr_rev.pl {work_base}.nr1-all.sort.clstr {work_base}.nr1.nr2.clstr > {work_base}.nr1.nr2-all.clstr && \
                    {cdhitpath}clstr_sort_by.pl < {work_base}.nr1.nr2-all.clstr > {work_base}.nr1.nr2-all.sort.clstr && \
                    mv {work_base}.nr1.nr2 {f}.cdhit && \
-                   mv {work_base}.nr1.nr2-all.sort.clstr {f}.cdhit.clstr \
-                   {cleanup_cmd}""".format(**locals())
+                   mv {work_base}.nr1.nr2-all.sort.clstr {f}.cdhit.clstr""".format(**locals())
             
             self.message(k)
-            task_all_454 = GridTask(template=defaulttemplate, name=self.stepname+"_all_454", command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir)
-            task_all_454.wait()
+            task_all_454 = GridTask(template=defaulttemplate, name=self.stepname+"_all_454", 
+                    command=k, cpu=n_cpu_454,  dependson=[], cwd = self.stepdir, flag_completion = True)
+            self.waitOnGridTasks([task_all_454],fail_policy="ExitOnFirst")
+            
+            if not YAPGlobals.debug_grid_tasks:
+                GridTask(template=defaulttemplate, name=self.stepname+"_cleanup_454", 
+                                            command="rm -rf scratch", cpu=1,  dependson=[], cwd = self.stepdir).wait()
             
 
 class   CDHIT_454(DefaultStep):

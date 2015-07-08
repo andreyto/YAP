@@ -454,7 +454,8 @@ def finalize(input):
     ### aggressive de-noising:
     elif options.strictlevel==2:
         args=         { 
-                        "T" : "%s" % (options.nodesize)
+                        "T" : "%s" % (options.nodesize),
+                        "splits" : options.preclust_splits
                     }
         CD_1 = CDHIT_Preclust(options.nodesize, args, [clean2])
         
@@ -896,6 +897,8 @@ group.add_option("--dummy-grid-tasks", dest="dummy_grid_tasks", action = "store_
                  help="Use dummy grid tasks that run tasks inside the current process in a blocking subprocess (for debugging). Probably use with dummy threads or you can flood the current node from multiple threads\n[%default]", metavar="#")
 group.add_option("--large-run", dest="large_run", action = "store_true", default=False,
                  help="This will be a large scale run, modify behaviour in some places for scalability\n[%default]", metavar="#")
+group.add_option("--preclust-splits", dest="preclust_splits", default=10,
+                 help="Number of data splits in pre-clustering step. Might be useful if in a large scale run the CDHIT 454 preclust is killed\n[%default]", metavar="#")
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
